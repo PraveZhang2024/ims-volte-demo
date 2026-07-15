@@ -30,6 +30,7 @@ class RtpSender:
         ptime_ms: int,
         timestamp_step: int,
         amr_path: Path,
+        sock: socket.socket | None = None,
     ) -> None:
         self.local_ip = local_ip
         self.local_port = local_port
@@ -39,6 +40,8 @@ class RtpSender:
         self.ptime_ms = ptime_ms
         self.timestamp_step = timestamp_step
         self.amr_path = amr_path
+        self._sock = sock
+        self._owns_socket = sock is None
         self.sequence = secrets.randbelow(0xFFFF)
         self.timestamp = secrets.randbelow(0xFFFFFFFF)
         self.ssrc = secrets.randbits(32)
@@ -47,7 +50,13 @@ class RtpSender:
         self._thread: threading.Thread | None = None
 
     @classmethod
-    def from_config(cls, config: AppConfig, local_ip: str, remote_media: RemoteMedia) -> "RtpSender":
+    def from_config(
+        cls,
+        config: AppConfig,
+        local_ip: str,
+        remote_media: RemoteMedia,
+        sock: socket.socket | None = None,
+    ) -> "RtpSender":
         return cls(
             local_ip=local_ip,
             local_port=config.network.local_rtp_port,
@@ -57,6 +66,7 @@ class RtpSender:
             ptime_ms=config.media.ptime_ms,
             timestamp_step=int(config.media.clock_rate * config.media.ptime_ms / 1000),
             amr_path=config.base_dir / config.media.send_file,
+            sock=sock,
         )
 
     def start(self) -> None:
@@ -69,13 +79,21 @@ class RtpSender:
             self._thread.join(timeout=2)
 
     def _run(self) -> None:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if hasattr(socket, "SO_REUSEPORT"):
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        sock = self._sock or socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         reader = AmrWbFileReader(self.amr_path, loop=True)
         try:
-            sock.bind((self.local_ip, self.local_port))
+            if self._owns_socket:
+                sock.bind((self.local_ip, self.local_port))
+            LOGGER.info(
+                "RTP sender started: %s:%s -> %s:%s PT=%s SSRC=%s file=%s",
+                self.local_ip,
+                self.local_port,
+                self.remote_ip,
+                self.remote_port,
+                self.payload_type,
+                self.ssrc,
+                self.amr_path,
+            )
             interval = self.ptime_ms / 1000.0
             next_send = time.monotonic()
             while not self._stop.is_set():
@@ -93,11 +111,20 @@ class RtpSender:
                 )
                 sock.sendto(packet.to_bytes(), (self.remote_ip, self.remote_port))
                 self.packets_sent += 1
+                if self.packets_sent == 1 or self.packets_sent % 100 == 0:
+                    LOGGER.info(
+                        "RTP sent packets=%s last_seq=%s last_timestamp=%s payload_bytes=%s",
+                        self.packets_sent,
+                        packet.sequence,
+                        packet.timestamp,
+                        len(packet.payload),
+                    )
                 self.sequence = (self.sequence + 1) & 0xFFFF
                 self.timestamp = (self.timestamp + self.timestamp_step) & 0xFFFFFFFF
                 next_send += interval
                 time.sleep(max(0, next_send - time.monotonic()))
         finally:
             reader.close()
-            sock.close()
+            if self._owns_socket:
+                sock.close()
             LOGGER.info("RTP sender stopped after %s packets", self.packets_sent)

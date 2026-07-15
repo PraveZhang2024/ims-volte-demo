@@ -23,23 +23,36 @@ class RtpReceiver:
         local_port: int,
         payload_type: int,
         output_path: Path,
+        sock: socket.socket | None = None,
+        close_socket_on_stop: bool = False,
     ) -> None:
         self.local_ip = local_ip
         self.local_port = local_port
         self.payload_type = payload_type
         self.output_path = output_path
+        self._sock = sock
+        self._owns_socket = sock is None
+        self._close_socket_on_stop = close_socket_on_stop
         self.packets_received = 0
         self.frames_written = 0
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
     @classmethod
-    def from_config(cls, config: AppConfig, local_ip: str) -> "RtpReceiver":
+    def from_config(
+        cls,
+        config: AppConfig,
+        local_ip: str,
+        sock: socket.socket | None = None,
+        close_socket_on_stop: bool = False,
+    ) -> "RtpReceiver":
         return cls(
             local_ip=local_ip,
             local_port=config.network.local_rtp_port,
             payload_type=config.media.payload_type,
             output_path=config.base_dir / config.media.receive_file,
+            sock=sock,
+            close_socket_on_stop=close_socket_on_stop,
         )
 
     def start(self) -> None:
@@ -52,21 +65,37 @@ class RtpReceiver:
             self._thread.join(timeout=2)
 
     def _run(self) -> None:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if hasattr(socket, "SO_REUSEPORT"):
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        sock = self._sock or socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         writer = AmrWbFileWriter(self.output_path)
         try:
-            sock.bind((self.local_ip, self.local_port))
+            if self._owns_socket:
+                sock.bind((self.local_ip, self.local_port))
             sock.settimeout(0.5)
+            LOGGER.info(
+                "RTP receiver started: %s:%s PT=%s output=%s",
+                self.local_ip,
+                self.local_port,
+                self.payload_type,
+                self.output_path,
+            )
             while not self._stop.is_set():
                 try:
-                    data, _addr = sock.recvfrom(65535)
+                    data, addr = sock.recvfrom(65535)
                 except socket.timeout:
                     continue
                 packet = RtpPacket.from_bytes(data)
                 self.packets_received += 1
+                if self.packets_received == 1 or self.packets_received % 100 == 0:
+                    LOGGER.info(
+                        "RTP received packets=%s from=%s:%s PT=%s seq=%s timestamp=%s payload_bytes=%s",
+                        self.packets_received,
+                        addr[0],
+                        addr[1],
+                        packet.payload_type,
+                        packet.sequence,
+                        packet.timestamp,
+                        len(packet.payload),
+                    )
                 if packet.payload_type != self.payload_type:
                     LOGGER.debug("Ignoring RTP payload type %s", packet.payload_type)
                     continue
@@ -75,7 +104,8 @@ class RtpReceiver:
                 self.frames_written += 1
         finally:
             writer.close()
-            sock.close()
+            if self._owns_socket or self._close_socket_on_stop:
+                sock.close()
             LOGGER.info(
                 "RTP receiver stopped after %s packets, %s frames",
                 self.packets_received,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import socket
 import time
 
 from app.config import AppConfig
@@ -127,8 +128,24 @@ class ImsCallClient:
             raise SipError(f"Unexpected SIP response during call setup: {response.start_line}")
 
     def run_media(self, remote_media: RemoteMedia) -> tuple[RtpSender, RtpReceiver]:
-        sender = RtpSender.from_config(self.config, self.local_ip, remote_media)
-        receiver = RtpReceiver.from_config(self.config, self.local_ip)
+        LOGGER.info(
+            "Starting media: local=%s:%s remote=%s:%s PT=%s codec=%s",
+            self.local_ip,
+            self.config.network.local_rtp_port,
+            remote_media.ip,
+            remote_media.port,
+            remote_media.payload_type,
+            remote_media.codec,
+        )
+        rtp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        rtp_sock.bind((self.local_ip, self.config.network.local_rtp_port))
+        sender = RtpSender.from_config(self.config, self.local_ip, remote_media, sock=rtp_sock)
+        receiver = RtpReceiver.from_config(
+            self.config,
+            self.local_ip,
+            sock=rtp_sock,
+            close_socket_on_stop=True,
+        )
         receiver.start()
         sender.start()
         return sender, receiver
