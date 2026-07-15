@@ -18,4 +18,6 @@ def test_xfrm_setup_commands_are_dry_run_safe():
     commands = manager.build_setup_commands(context)
     flattened = [" ".join(command) for command in commands]
     assert any("state add src 10.0.0.1 dst 10.0.0.2" in command for command in flattened)
+    assert any("auth-trunc hmac(md5) 0x" in command for command in flattened)
+    assert any("enc cipher_null 0x" in command for command in flattened)
     assert any("policy add dir out" in command for command in flattened)

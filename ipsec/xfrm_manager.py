@@ -23,8 +23,10 @@ class XfrmContext:
     remote_spi: int
     ck_hex: str
     ik_hex: str
-    auth_alg: str = "hmac(md5)"
-    enc_alg: str = "ecb(cipher_null)"
+    auth_alg: str
+    auth_trunc_bits: int
+    enc_alg: str
+    use_null_encryption: bool
 
 
 class XfrmManager:
@@ -47,6 +49,8 @@ class XfrmManager:
         if not local_security.spi_c or not server_security.spi_s:
             raise IpsecError("Both local spi-c and server spi-s must be known")
         remote_port = server_security.port_s or 5060
+        auth_alg, auth_trunc_bits = _linux_auth_alg(server_security.alg)
+        enc_alg, use_null_encryption = _linux_enc_alg(server_security.ealg)
         return XfrmContext(
             ue_ip=ue_ip,
             pcscf_ip=pcscf_ip,
@@ -57,6 +61,10 @@ class XfrmManager:
             remote_spi=server_security.spi_s,
             ck_hex=ck_hex,
             ik_hex=ik_hex,
+            auth_alg=auth_alg,
+            auth_trunc_bits=auth_trunc_bits,
+            enc_alg=enc_alg,
+            use_null_encryption=use_null_encryption,
         )
 
     def setup(self, context: XfrmContext) -> list[CommandResult]:
@@ -93,7 +101,7 @@ class XfrmManager:
         return [["ip", "-s", "xfrm", "state"], ["ip", "-s", "xfrm", "policy"]]
 
     def _state_add_out(self, context: XfrmContext) -> list[str]:
-        return [
+        command = [
             "ip",
             "xfrm",
             "state",
@@ -108,16 +116,16 @@ class XfrmManager:
             str(context.local_spi),
             "mode",
             "transport",
-            "auth",
+            "auth-trunc",
             context.auth_alg,
-            context.ik_hex,
-            "enc",
-            context.enc_alg,
-            context.ck_hex,
+            _hex_key(context.ik_hex),
+            str(context.auth_trunc_bits),
         ]
+        command.extend(_enc_args(context))
+        return command
 
     def _state_add_in(self, context: XfrmContext) -> list[str]:
-        return [
+        command = [
             "ip",
             "xfrm",
             "state",
@@ -132,13 +140,13 @@ class XfrmManager:
             str(context.remote_spi),
             "mode",
             "transport",
-            "auth",
+            "auth-trunc",
             context.auth_alg,
-            context.ik_hex,
-            "enc",
-            context.enc_alg,
-            context.ck_hex,
+            _hex_key(context.ik_hex),
+            str(context.auth_trunc_bits),
         ]
+        command.extend(_enc_args(context))
+        return command
 
     def _policy_add_out(self, context: XfrmContext) -> list[str]:
         return [
@@ -197,3 +205,33 @@ class XfrmManager:
             "mode",
             "transport",
         ]
+
+
+def _linux_auth_alg(ims_alg: str) -> tuple[str, int]:
+    normalized = ims_alg.lower()
+    if normalized == "hmac-md5-96":
+        return "hmac(md5)", 96
+    if normalized in ("hmac-sha-1-96", "hmac-sha1-96"):
+        return "hmac(sha1)", 96
+    raise IpsecError(f"Unsupported IMS IPsec auth algorithm: {ims_alg}")
+
+
+def _linux_enc_alg(ims_ealg: str) -> tuple[str, bool]:
+    normalized = ims_ealg.lower()
+    if normalized == "null":
+        return "cipher_null", True
+    if normalized == "aes-cbc":
+        return "cbc(aes)", False
+    if normalized == "des-ede3-cbc":
+        return "cbc(des3_ede)", False
+    raise IpsecError(f"Unsupported IMS IPsec encryption algorithm: {ims_ealg}")
+
+
+def _enc_args(context: XfrmContext) -> list[str]:
+    if context.use_null_encryption:
+        return ["enc", context.enc_alg, "0x"]
+    return ["enc", context.enc_alg, _hex_key(context.ck_hex)]
+
+
+def _hex_key(value: str) -> str:
+    return value if value.startswith("0x") else f"0x{value}"

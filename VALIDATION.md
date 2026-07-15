@@ -91,6 +91,7 @@ sudo python3 main.py --config config/demo.yaml --mode register --log-level DEBUG
 Expected:
 
 - `ip -s xfrm state` and `ip -s xfrm policy` show the generated entries.
+- For `Security-Server` with `alg=hmac-md5-96` and `ealg=null`, generated state commands should use `auth-trunc hmac(md5) 0x... 96 enc cipher_null 0x`.
 - The second REGISTER is sent through ESP.
 - IMS returns 200 OK for REGISTER.
 
