@@ -1,6 +1,6 @@
 network:
   interface: simu_d63cc342
-  pcscf_ip: 190.0.0.10
+  pcscf_ip: 10.2.30.160
   pcscf_port: 5060
   local_sip_port: 5060
   local_protected_port: 15060
@@ -8,15 +8,15 @@ network:
   connect_timeout_seconds: 5
 
 subscriber:
-  imsi: "001010123456789"
-  impi: "001010123456789@ims.system.com"
-  impu: "sip:001010123456789@ims.system.com"
-  realm: "ims.system.com"
-  k: "00112233445566778899AABBCCDDEEFF"
-  opc: "00112233445566778899AABBCCDDEEFF"
+  imsi: "404090110012679"
+  impi: "404090110012679@ims.mnc009.mcc404.3gppnetwork.org"
+  impu: "sip:+8615500084092@ims.mnc009.mcc404.3gppnetwork.org"
+  realm: "ims.mnc009.mcc404.3gppnetwork.org"
+  k: "8cc2c4b73281a1fe614eb3b4da9c72bc"
+  opc: "675bf1456b21e1b3efbd6343e8c88eba"
 
 call:
-  target_uri: "sip:001010987654321@ims.system.com"
+  target_uri: "sip:+8616510000896@ims.mnc009.mcc404.3gppnetwork.org"
   duration_seconds: 30
   local_display_name: "IMS Demo UE"
   user_agent: "python-ims-volte-demo/0.1"
