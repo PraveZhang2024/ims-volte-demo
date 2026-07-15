@@ -39,7 +39,7 @@ XFRM dry-run status.
 ## 3. Offline Unit Tests
 
 ```bash
-pytest
+python -m pytest
 ```
 
 Expected: parser, digest, SDP, RTP, AMR-WB, AKA nonce split, and XFRM command
