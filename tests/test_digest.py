@@ -1,4 +1,7 @@
 from aka.digest_akav1 import DigestCredentials, build_authorization, calculate_response
+from aka.milenage_service import AkaResult
+from app.config import AppConfig, CallConfig, DebugConfig, ImsConfig, MediaConfig, NetworkConfig, SubscriberConfig
+from sip.register import ImsRegistrationClient
 
 
 def test_digest_authorization_contains_expected_fields():
@@ -18,3 +21,50 @@ def test_digest_authorization_contains_expected_fields():
     assert 'username="001@ims"' in header
     assert "algorithm=AKAv1-MD5" in header
     assert f'response="{calculate_response(credentials)}"' in header
+
+
+def test_register_authorization_uri_matches_register_request_uri_when_challenge_realm_differs():
+    config = AppConfig(
+        network=NetworkConfig(
+            interface="ims0",
+            pcscf_ip="10.0.0.2",
+            pcscf_port=5060,
+            local_sip_port=5060,
+            local_protected_port=15060,
+            local_rtp_port=40000,
+        ),
+        subscriber=SubscriberConfig(
+            imsi="00101",
+            impi="00101@ims.mnc009.mcc404.3gppnetwork.org",
+            impu="sip:+100@ims.mnc009.mcc404.3gppnetwork.org",
+            realm="ims.mnc009.mcc404.3gppnetwork.org",
+            k="00" * 16,
+            opc="11" * 16,
+        ),
+        call=CallConfig(target_uri="sip:+101@ims.mnc009.mcc404.3gppnetwork.org", duration_seconds=1, local_display_name="UE"),
+        ims=ImsConfig(),
+        media=MediaConfig(
+            codec="AMR-WB",
+            payload_type=96,
+            clock_rate=16000,
+            ptime_ms=20,
+            octet_align=True,
+            send_file="send.amr",
+            receive_file="received.amr",
+        ),
+        debug=DebugConfig(
+            dump_sip=True,
+            dump_sdp=True,
+            dump_xfrm_commands=True,
+            execute_xfrm_commands=False,
+            capture_pcap=False,
+        ),
+        base_dir=__import__("pathlib").Path("."),
+    )
+    client = ImsRegistrationClient(config=config, local_ip="190.0.0.38", xfrm_manager=None)  # type: ignore[arg-type]
+    header = client._authorization(
+        {"realm": "ims.system.com", "nonce": "nonce", "algorithm": "AKAv1-MD5"},
+        AkaResult(res=b"\x01\x02", ck=b"\x00" * 16, ik=b"\x11" * 16, ak=b"", sqn=b"", mac_verified=True),
+    )
+    assert 'realm="ims.system.com"' in header
+    assert 'uri="sip:ims.mnc009.mcc404.3gppnetwork.org"' in header

@@ -190,10 +190,11 @@ class ImsRegistrationClient:
         qop = params.get("qop")
         if qop and "," in qop:
             qop = "auth" if "auth" in [part.strip() for part in qop.split(",")] else qop.split(",")[0]
+        request_uri = f"sip:{self.config.subscriber.realm}"
         credentials = DigestCredentials(
             username=self.config.subscriber.impi,
             realm=realm,
-            uri=f"sip:{realm}",
+            uri=request_uri,
             method="REGISTER",
             res_hex=aka_result.res_hex,
             nonce=params["nonce"],
@@ -201,4 +202,5 @@ class ImsRegistrationClient:
             qop=qop,
             opaque=params.get("opaque"),
         )
+        LOGGER.info("REGISTER digest uri=%s realm=%s", request_uri, realm)
         return build_authorization(credentials)
