@@ -164,7 +164,7 @@ class SipBuilder:
 
     def _contact(self, *, expires: int | None = None) -> str:
         features = "+g.3gpp.icsi-ref=\"urn%3Aurn-7%3A3gpp-service.ims.icsi.mmtel\""
-        value = f"<sip:{self.config.subscriber.impi};transport=tcp>;{features}"
+        value = f"<sip:{self.config.subscriber.impi}@{self.local_ip}:{self.local_sip_port};transport=tcp>;{features}"
         if expires is not None:
             value += f";expires={expires}"
         return value
