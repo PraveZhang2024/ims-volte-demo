@@ -109,16 +109,29 @@ class SipBuilder:
         msg.add_header("Content-Type", "application/sdp")
         return msg
 
-    def prack(self, ids: SipSessionIds, dialog_to: str, rack: str, route_set: list[str]) -> SipMessage:
-        target = self.config.call.target_uri
+    def prack(
+        self,
+        ids: SipSessionIds,
+        dialog_to: str,
+        rack: str,
+        route_set: list[str],
+        request_uri: str | None = None,
+    ) -> SipMessage:
+        target = request_uri or self.config.call.target_uri
         msg = SipMessage(f"PRACK {target} SIP/2.0")
         self._base_headers(msg, ids, "PRACK", target, route_set=route_set)
         msg.add_header("To", dialog_to)
         msg.add_header("RAck", rack)
         return msg
 
-    def ack(self, ids: SipSessionIds, dialog_to: str, route_set: list[str]) -> SipMessage:
-        target = self.config.call.target_uri
+    def ack(
+        self,
+        ids: SipSessionIds,
+        dialog_to: str,
+        route_set: list[str],
+        request_uri: str | None = None,
+    ) -> SipMessage:
+        target = request_uri or self.config.call.target_uri
         msg = SipMessage(f"ACK {target} SIP/2.0")
         self._base_headers(
             msg,
@@ -132,8 +145,14 @@ class SipBuilder:
         msg.add_header("To", dialog_to)
         return msg
 
-    def bye(self, ids: SipSessionIds, dialog_to: str, route_set: list[str]) -> SipMessage:
-        target = self.config.call.target_uri
+    def bye(
+        self,
+        ids: SipSessionIds,
+        dialog_to: str,
+        route_set: list[str],
+        request_uri: str | None = None,
+    ) -> SipMessage:
+        target = request_uri or self.config.call.target_uri
         msg = SipMessage(f"BYE {target} SIP/2.0")
         self._base_headers(msg, ids, "BYE", target, route_set=route_set)
         msg.add_header("To", dialog_to)

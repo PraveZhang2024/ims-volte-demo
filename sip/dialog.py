@@ -23,10 +23,13 @@ class SipDialog:
             self.remote_tag = to_value.split(";tag=", 1)[1].split(";", 1)[0]
         contact = response.get("Contact")
         if contact:
-            self.remote_target = contact
+            self.remote_target = extract_sip_uri(contact)
         record_routes = response.get_all("Record-Route")
         if record_routes:
             self.route_set = list(reversed(record_routes))
+
+    def request_uri(self, fallback: str) -> str:
+        return self.remote_target or fallback
 
 
 def rack_from_response(response: SipMessage) -> str | None:
@@ -38,3 +41,10 @@ def rack_from_response(response: SipMessage) -> str | None:
     if len(cseq_parts) < 2:
         return None
     return f"{rseq} {cseq_parts[0]} {cseq_parts[1]}"
+
+
+def extract_sip_uri(value: str) -> str:
+    value = value.strip()
+    if "<" in value and ">" in value:
+        return value.split("<", 1)[1].split(">", 1)[0].strip()
+    return value.split(";", 1)[0].strip()

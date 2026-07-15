@@ -76,8 +76,21 @@ class ImsCallClient:
                     remote_media = parse_remote_sdp(response.body)
                 rack = rack_from_response(response)
                 if rack:
-                    LOGGER.info("Sending PRACK for reliable provisional response: RAck=%s", rack)
-                    self.transport.send(self.builder.prack(ids, dialog.dialog_to, rack, dialog.route_set))
+                    request_uri = dialog.request_uri(self.config.call.target_uri)
+                    LOGGER.info(
+                        "Sending PRACK for reliable provisional response: RAck=%s Request-URI=%s",
+                        rack,
+                        request_uri,
+                    )
+                    self.transport.send(
+                        self.builder.prack(
+                            ids,
+                            dialog.dialog_to,
+                            rack,
+                            dialog.route_set,
+                            request_uri=request_uri,
+                        )
+                    )
                 continue
             if 200 <= code < 300:
                 method = response.method
@@ -87,7 +100,14 @@ class ImsCallClient:
                     dialog.update_from_response(response)
                     if response.body:
                         remote_media = parse_remote_sdp(response.body)
-                    self.transport.send(self.builder.ack(ids, dialog.dialog_to, dialog.route_set))
+                    self.transport.send(
+                        self.builder.ack(
+                            ids,
+                            dialog.dialog_to,
+                            dialog.route_set,
+                            request_uri=dialog.request_uri(self.config.call.target_uri),
+                        )
+                    )
                     if remote_media is None:
                         raise SipError("200 INVITE has no usable remote SDP")
                     return CallResult(
@@ -114,7 +134,14 @@ class ImsCallClient:
         return sender, receiver
 
     def bye(self, ids: SipSessionIds, dialog: SipDialog) -> SipMessage:
-        self.transport.send(self.builder.bye(ids, dialog.dialog_to, dialog.route_set))
+        self.transport.send(
+            self.builder.bye(
+                ids,
+                dialog.dialog_to,
+                dialog.route_set,
+                request_uri=dialog.request_uri(self.config.call.target_uri),
+            )
+        )
         while True:
             response = self.transport.receive()
             if response.status_code == 200 and response.method == "BYE":
