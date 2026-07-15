@@ -21,10 +21,11 @@ class SecurityAssociation:
 
     @classmethod
     def local(cls, local_spi: int, local_port: int, remote_port: int) -> "SecurityAssociation":
-        return cls(spi_c=local_spi, spi_s=0, port_c=local_port, port_s=remote_port, q="0.1")
+        return cls(spi_c=local_spi, spi_s=local_spi, port_c=local_port, port_s=remote_port, q="0.1")
 
     @classmethod
     def parse(cls, value: str) -> "SecurityAssociation":
+        value = split_security_header(value)[0]
         mechanism, *parts = [part.strip() for part in value.split(";") if part.strip()]
         params: dict[str, str] = {}
         for part in parts:
@@ -74,8 +75,50 @@ def build_security_client(local_port: int, remote_port: int) -> SecurityAssociat
     )
 
 
+def build_security_client_header(
+    *,
+    local_port: int,
+    remote_port: int,
+    algorithms: list[str],
+    encryption_algorithms: list[str],
+) -> tuple[SecurityAssociation, str]:
+    base = build_security_client(local_port, remote_port)
+    proposals = [
+        SecurityAssociation(
+            alg=alg,
+            ealg=ealg,
+            spi_c=base.spi_c,
+            spi_s=base.spi_s,
+            port_c=base.port_c,
+            port_s=base.port_s,
+            q=base.q,
+        ).to_header_value(include_q=False)
+        for alg in algorithms
+        for ealg in encryption_algorithms
+    ]
+    return base, ",".join(proposals)
+
+
 def build_security_verify(server: SecurityAssociation) -> str:
     return server.to_header_value(include_q=False)
+
+
+def split_security_header(value: str) -> list[str]:
+    parts: list[str] = []
+    token = ""
+    in_quote = False
+    for char in value:
+        if char == '"':
+            in_quote = not in_quote
+        if char == "," and not in_quote:
+            if token.strip():
+                parts.append(token.strip())
+            token = ""
+        else:
+            token += char
+    if token.strip():
+        parts.append(token.strip())
+    return parts
 
 
 def _int_param(params: dict[str, str], name: str) -> int:

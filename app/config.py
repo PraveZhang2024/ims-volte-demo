@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +41,19 @@ class CallConfig:
 
 
 @dataclass(frozen=True)
+class ImsConfig:
+    register_expires: int = 600000
+    compact_headers: bool = True
+    initial_authorization: bool = True
+    contact_user: str = ""
+    contact_features: list[str] = field(default_factory=list)
+    security_client_algorithms: list[str] = field(default_factory=lambda: ["hmac-md5-96", "hmac-sha-1-96"])
+    security_client_encryption_algorithms: list[str] = field(
+        default_factory=lambda: ["des-ede3-cbc", "aes-cbc", "null"]
+    )
+
+
+@dataclass(frozen=True)
 class MediaConfig:
     codec: str
     payload_type: int
@@ -66,6 +79,7 @@ class AppConfig:
     network: NetworkConfig
     subscriber: SubscriberConfig
     call: CallConfig
+    ims: ImsConfig
     media: MediaConfig
     debug: DebugConfig
     base_dir: Path
@@ -78,6 +92,7 @@ class AppConfig:
             f"Subscriber IMPI: {self.subscriber.impi}",
             f"Subscriber IMPU: {self.subscriber.impu}",
             f"Target URI: {self.call.target_uri}",
+            f"REGISTER expires: {self.ims.register_expires}",
             f"Media: {self.media.codec} PT={self.media.payload_type} ptime={self.media.ptime_ms}ms",
             f"XFRM execution: {'enabled' if self.debug.execute_xfrm_commands else 'dry-run'}",
         ]
@@ -99,6 +114,7 @@ def load_config(path: str | Path) -> AppConfig:
         network=_section(raw, "network", NetworkConfig),
         subscriber=_section(raw, "subscriber", SubscriberConfig),
         call=_section(raw, "call", CallConfig),
+        ims=_optional_section(raw, "ims", ImsConfig),
         media=_section(raw, "media", MediaConfig),
         debug=_section(raw, "debug", DebugConfig),
         base_dir=base_dir,
@@ -109,6 +125,17 @@ def _section(raw: dict[str, Any], name: str, cls: type) -> Any:
     value = raw.get(name)
     if not isinstance(value, dict):
         raise ConfigError(f"Missing config section: {name}")
+
+    try:
+        return cls(**value)
+    except TypeError as exc:
+        raise ConfigError(f"Invalid config section {name}: {exc}") from exc
+
+
+def _optional_section(raw: dict[str, Any], name: str, cls: type) -> Any:
+    value = raw.get(name, {})
+    if not isinstance(value, dict):
+        raise ConfigError(f"Invalid config section {name}: expected mapping")
 
     try:
         return cls(**value)

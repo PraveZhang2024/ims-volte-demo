@@ -64,22 +64,26 @@ class SipBuilder:
         authorization: str | None = None,
         security_client: str | None = None,
         security_verify: str | None = None,
-        expires: int = 3600,
+        expires: int | None = None,
     ) -> SipMessage:
         impu = self.config.subscriber.impu
         realm = self.config.subscriber.realm
+        expires = expires if expires is not None else self.config.ims.register_expires
         msg = SipMessage(f"REGISTER sip:{realm} SIP/2.0")
         self._base_headers(msg, ids, "REGISTER", impu)
-        msg.add_header("To", f"<{impu}>")
-        msg.add_header("Contact", self._contact(expires=expires))
+        msg.add_header(self._h("To"), f"<{impu}>")
+        msg.add_header(self._h("Contact"), self._contact(expires=expires))
         msg.add_header("Expires", str(expires))
-        msg.add_header("Supported", "path, sec-agree")
         msg.add_header("Require", "sec-agree")
         msg.add_header("Proxy-Require", "sec-agree")
+        msg.add_header(self._h("Supported"), "path,sec-agree")
+        msg.add_header("Allow", "INVITE,BYE,CANCEL,ACK,NOTIFY,UPDATE,PRACK,INFO,MESSAGE,OPTIONS,REFER")
+        if authorization is None and self.config.ims.initial_authorization:
+            authorization = self._empty_register_authorization(realm)
         msg.add_header("P-Access-Network-Info", "3GPP-E-UTRAN-FDD")
         if security_client:
             msg.add_header("Security-Client", security_client)
-        if authorization:
+        if authorization is not None:
             msg.add_header("Authorization", authorization)
         if security_verify:
             msg.add_header("Security-Verify", security_verify)
@@ -153,18 +157,44 @@ class SipBuilder:
     ) -> None:
         for route in route_set or []:
             msg.add_header("Route", route)
-        msg.add_header("Via", f"SIP/2.0/TCP {self.local_ip}:{self.local_sip_port};branch={new_branch()}")
+        msg.add_header(self._h("Via"), f"SIP/2.0/TCP {self.local_ip}:{self.local_sip_port};branch={new_branch()}")
         msg.add_header("Max-Forwards", "70")
-        msg.add_header("From", f"\"{self.config.call.local_display_name}\" <{self.config.subscriber.impu}>;tag={ids.from_tag}")
-        msg.add_header("Call-ID", ids.call_id)
+        msg.add_header(self._h("From"), f"<{self.config.subscriber.impu}>;tag={ids.from_tag}")
+        msg.add_header(self._h("Call-ID"), ids.call_id)
         cseq = ids.cseq_for(reuse_cseq_method or method) if reuse_cseq else ids.next_cseq()
         ids.remember_cseq(method, cseq)
         msg.add_header("CSeq", f"{cseq} {method}")
         msg.add_header("User-Agent", self.config.call.user_agent)
 
     def _contact(self, *, expires: int | None = None) -> str:
-        features = "+g.3gpp.icsi-ref=\"urn%3Aurn-7%3A3gpp-service.ims.icsi.mmtel\""
-        value = f"<sip:{self.config.subscriber.impi}@{self.local_ip}:{self.local_sip_port};transport=tcp>;{features}"
+        contact_user = self.config.ims.contact_user or self.config.subscriber.impi
+        features = self.config.ims.contact_features or [
+            '+g.3gpp.icsi-ref="urn%3Aurn-7%3A3gpp-service.ims.icsi.mmtel"'
+        ]
+        value = f"<sip:{contact_user}@{self.local_ip}:{self.local_sip_port}>"
+        if features:
+            value += ";" + ";".join(features)
         if expires is not None:
             value += f";expires={expires}"
         return value
+
+    def _empty_register_authorization(self, realm: str) -> str:
+        return (
+            f'Digest uri="sip:{realm}",'
+            f'username="{self.config.subscriber.impi}",'
+            'response="",'
+            f'realm="{realm}",'
+            'nonce=""'
+        )
+
+    def _h(self, name: str) -> str:
+        if not self.config.ims.compact_headers:
+            return name
+        return {
+            "Call-ID": "i",
+            "Contact": "m",
+            "From": "f",
+            "Supported": "k",
+            "To": "t",
+            "Via": "v",
+        }.get(name, name)

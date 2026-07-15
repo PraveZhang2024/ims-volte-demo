@@ -19,7 +19,29 @@ call:
   target_uri: "sip:+8616510000896@ims.mnc009.mcc404.3gppnetwork.org"
   duration_seconds: 30
   local_display_name: "IMS Demo UE"
-  user_agent: "python-ims-volte-demo/0.1"
+  user_agent: "Xiaomi_Xiaomi 12T Pro_OS1.0.18.0.ULFEUXM"
+
+ims:
+  register_expires: 600000
+  compact_headers: true
+  initial_authorization: true
+  contact_user: "b787ec73-9c73-4fbd-a7c9-c4e060c03c64"
+  contact_features:
+    - '+g.3gpp.accesstype="cellular2"'
+    - '+g.3gpp.ps-data-off="inactive"'
+    - "audio"
+    - "+g.3gpp.nw-init-ussi"
+    - "+g.3gpp.smsip"
+    - "video"
+    - '+g.3gpp.icsi-ref="urn%3Aurn-7%3A3gpp-service.ims.icsi.mmtel"'
+    - '+sip.instance="<urn:gsma:imei:86608806-008621-0>"'
+  security_client_algorithms:
+    - "hmac-md5-96"
+    - "hmac-sha-1-96"
+  security_client_encryption_algorithms:
+    - "des-ede3-cbc"
+    - "aes-cbc"
+    - "null"
 
 media:
   codec: "AMR-WB"

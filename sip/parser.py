@@ -8,7 +8,7 @@ from app.errors import SipError
 from sip.message import SipMessage
 
 HEADER_END = b"\r\n\r\n"
-CONTENT_LENGTH_RE = re.compile(r"^content-length\s*:\s*(\d+)\s*$", re.IGNORECASE | re.MULTILINE)
+CONTENT_LENGTH_RE = re.compile(r"^(content-length|l)\s*:\s*(\d+)\s*$", re.IGNORECASE | re.MULTILINE)
 
 
 class SipStreamParser:
@@ -118,5 +118,5 @@ def _content_length(header_text: str) -> int:
     for line in header_text.split("\r\n"):
         match = CONTENT_LENGTH_RE.match(line)
         if match:
-            return int(match.group(1))
+            return int(match.group(2))
     return 0

@@ -7,6 +7,17 @@ from typing import Iterable
 
 CRLF = "\r\n"
 
+HEADER_ALIASES = {
+    "call-id": "i",
+    "contact": "m",
+    "content-length": "l",
+    "from": "f",
+    "subject": "s",
+    "supported": "k",
+    "to": "t",
+    "via": "v",
+}
+
 
 @dataclass
 class SipMessage:
@@ -19,7 +30,11 @@ class SipMessage:
 
     def get_all(self, name: str) -> list[str]:
         lower = name.lower()
-        return [value for key, value in self.headers if key.lower() == lower]
+        aliases = {lower}
+        if lower in HEADER_ALIASES:
+            aliases.add(HEADER_ALIASES[lower])
+        aliases.update(alias for canonical, alias in HEADER_ALIASES.items() if alias == lower)
+        return [value for key, value in self.headers if key.lower() in aliases]
 
     def get(self, name: str, default: str | None = None) -> str | None:
         values = self.get_all(name)
@@ -50,9 +65,9 @@ class SipMessage:
         return self.start_line.split(maxsplit=1)[0]
 
     def with_content_length(self) -> "SipMessage":
-        filtered = [(k, v) for k, v in self.headers if k.lower() != "content-length"]
+        filtered = [(k, v) for k, v in self.headers if k.lower() not in ("content-length", "l")]
         self.headers = filtered
-        self.headers.append(("Content-Length", str(len(self.body.encode("utf-8")))))
+        self.headers.append(("l", str(len(self.body.encode("utf-8")))))
         return self
 
     def to_bytes(self) -> bytes:

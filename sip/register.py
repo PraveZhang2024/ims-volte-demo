@@ -11,8 +11,9 @@ from app.config import AppConfig
 from app.errors import SipError
 from ipsec.security_header import (
     SecurityAssociation,
-    build_security_client,
+    build_security_client_header,
     build_security_verify,
+    split_security_header,
 )
 from ipsec.xfrm_manager import XfrmContext, XfrmManager
 from sip.builder import SipBuilder, SipSessionIds
@@ -51,11 +52,13 @@ class ImsRegistrationClient:
 
     def perform(self) -> RegistrationResult:
         ids = SipSessionIds(local_ip=self.local_ip)
-        local_security = build_security_client(
+        local_security, security_client_header = build_security_client_header(
             local_port=self.config.network.local_protected_port,
             remote_port=self.config.network.pcscf_port,
+            algorithms=self.config.ims.security_client_algorithms,
+            encryption_algorithms=self.config.ims.security_client_encryption_algorithms,
         )
-        first_response = self._send_initial_register(ids, local_security)
+        first_response = self._send_initial_register(ids, local_security, security_client_header)
         if first_response.status_code != 401:
             raise SipError(f"Expected 401 Unauthorized, got {first_response.start_line}")
 
@@ -112,9 +115,10 @@ class ImsRegistrationClient:
         self,
         ids: SipSessionIds,
         local_security: SecurityAssociation,
+        security_client_header: str,
     ) -> SipMessage:
         builder = SipBuilder(self.config, self.local_ip, protected=False)
-        message = builder.register(ids, security_client=local_security.to_header_value())
+        message = builder.register(ids, security_client=security_client_header)
         transport = self._transport(local_port=self.config.network.local_sip_port)
         try:
             transport.connect()
@@ -167,8 +171,9 @@ class ImsRegistrationClient:
     def _parse_security_server(self, response: SipMessage) -> SecurityAssociation:
         values = response.get_all("Security-Server")
         for value in values:
-            if value.lower().startswith("ipsec-3gpp"):
-                return SecurityAssociation.parse(value)
+            for proposal in split_security_header(value):
+                if proposal.lower().startswith("ipsec-3gpp"):
+                    return SecurityAssociation.parse(proposal)
         raise SipError("401 response has no ipsec-3gpp Security-Server header")
 
     def _compute_aka(self, nonce: str) -> AkaResult:
