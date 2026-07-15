@@ -1,0 +1,118 @@
+"""Top-level orchestration for the IMS VoLTE demo client."""
+
+from __future__ import annotations
+
+import logging
+import time
+
+from app.config import AppConfig
+from app.state import ClientState
+from ipsec.xfrm_manager import XfrmManager
+from network.interface import InterfaceResolver
+from network.route import RouteChecker
+from sip.call import ImsCallClient
+from sip.register import ImsRegistrationClient, RegistrationResult
+from tools.capture import TcpdumpCapture
+from tools.command import CommandRunner
+
+LOGGER = logging.getLogger(__name__)
+
+
+class ImsVolteOrchestrator:
+    def __init__(self, config: AppConfig) -> None:
+        self.config = config
+        self.state = ClientState.INIT
+        self.command_runner = CommandRunner(
+            execute=True,
+            timeout_seconds=config.debug.command_timeout_seconds,
+        )
+        self.xfrm_runner = CommandRunner(
+            execute=config.debug.execute_xfrm_commands,
+            timeout_seconds=config.debug.command_timeout_seconds,
+        )
+        self.xfrm_manager = XfrmManager(self.xfrm_runner)
+
+    def print_summary(self) -> None:
+        for line in self.config.summary_lines():
+            print(line)
+
+    def network_check(self) -> str:
+        interface = InterfaceResolver(self.command_runner).get_ipv4(self.config.network.interface)
+        if not interface.is_up:
+            LOGGER.warning("IMS interface %s is not marked UP", interface.name)
+        route_checker = RouteChecker(self.command_runner)
+        route_checker.check_route(self.config.network.pcscf_ip, self.config.network.interface)
+        route_checker.check_tcp_connect(
+            local_ip=interface.ipv4,
+            local_port=0,
+            remote_ip=self.config.network.pcscf_ip,
+            remote_port=self.config.network.pcscf_port,
+            timeout_seconds=self.config.network.connect_timeout_seconds,
+        )
+        self._set_state(ClientState.NETWORK_READY)
+        return interface.ipv4
+
+    def register(self) -> RegistrationResult:
+        local_ip = self.network_check()
+        capture = self._capture()
+        capture.start()
+        try:
+            client = ImsRegistrationClient(
+                config=self.config,
+                local_ip=local_ip,
+                xfrm_manager=self.xfrm_manager,
+            )
+            self._set_state(ClientState.TCP_CONNECTED)
+            result = client.perform()
+            if result.stopped_before_protected_register:
+                self._set_state(ClientState.IPSEC_READY)
+            elif result.registered:
+                self._set_state(ClientState.REGISTERED)
+            return result
+        finally:
+            capture.stop()
+
+    def run_call(self) -> None:
+        registration = self.register()
+        if not registration.registered:
+            LOGGER.warning("Registration did not complete; call setup is skipped")
+            return
+
+        local_ip = registration.ids.local_ip
+        call_client = ImsCallClient(self.config, local_ip)
+        sender = None
+        receiver = None
+        try:
+            self._set_state(ClientState.INVITE_SENT)
+            call = call_client.establish(registration.ids, registration.service_routes)
+            self._set_state(ClientState.CALL_ESTABLISHED)
+
+            sender, receiver = call_client.run_media(call.remote_media)
+            self._set_state(ClientState.MEDIA_RUNNING)
+            time.sleep(self.config.call.duration_seconds)
+
+            self._set_state(ClientState.TERMINATING)
+            if sender:
+                sender.stop()
+            call_client.bye(registration.ids, call.dialog)
+            if receiver:
+                receiver.stop()
+            self._set_state(ClientState.TERMINATED)
+        finally:
+            if sender:
+                sender.stop()
+            if receiver:
+                receiver.stop()
+            call_client.close()
+            self.xfrm_manager.cleanup_all()
+
+    def _capture(self) -> TcpdumpCapture:
+        return TcpdumpCapture(
+            interface=self.config.network.interface,
+            output_dir=self.config.base_dir / "captures",
+            enabled=self.config.debug.capture_pcap,
+        )
+
+    def _set_state(self, state: ClientState) -> None:
+        self.state = state
+        LOGGER.info("State -> %s", state.value)

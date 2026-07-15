@@ -1,0 +1,39 @@
+network:
+  interface: simu_d63cc342
+  pcscf_ip: 190.0.0.10
+  pcscf_port: 5060
+  local_sip_port: 5060
+  local_protected_port: 15060
+  local_rtp_port: 40000
+  connect_timeout_seconds: 5
+
+subscriber:
+  imsi: "001010123456789"
+  impi: "001010123456789@ims.system.com"
+  impu: "sip:001010123456789@ims.system.com"
+  realm: "ims.system.com"
+  k: "00112233445566778899AABBCCDDEEFF"
+  opc: "00112233445566778899AABBCCDDEEFF"
+
+call:
+  target_uri: "sip:001010987654321@ims.system.com"
+  duration_seconds: 30
+  local_display_name: "IMS Demo UE"
+  user_agent: "python-ims-volte-demo/0.1"
+
+media:
+  codec: "AMR-WB"
+  payload_type: 96
+  clock_rate: 16000
+  ptime_ms: 20
+  octet_align: true
+  send_file: "media_files/send.amr"
+  receive_file: "media_files/received.amr"
+
+debug:
+  dump_sip: true
+  dump_sdp: true
+  dump_xfrm_commands: true
+  execute_xfrm_commands: false
+  capture_pcap: false
+  command_timeout_seconds: 10
