@@ -21,3 +21,13 @@ def test_xfrm_setup_commands_are_dry_run_safe():
     assert any("auth-trunc hmac(md5) 0x" in command for command in flattened)
     assert any("enc ecb(cipher_null) " in command for command in flattened)
     assert any("policy add dir out" in command for command in flattened)
+
+    cleanup = [" ".join(command) for command in manager.build_cleanup_commands(context)]
+    assert any(
+        "policy delete dir out src 10.0.0.1 dst 10.0.0.2 proto tcp sport 15060 dport 5060" in command
+        for command in cleanup
+    )
+    assert any(
+        "policy delete dir in src 10.0.0.2 dst 10.0.0.1 proto tcp sport 5060 dport 15060" in command
+        for command in cleanup
+    )
