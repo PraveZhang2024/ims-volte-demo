@@ -63,18 +63,27 @@ class SipTcpTransport:
             LOGGER.info("SIP SEND\n%s", payload.decode("utf-8", errors="replace"))
         sock.sendall(payload)
 
-    def receive(self) -> SipMessage:
+    def receive(self, *, timeout_seconds: float | None = None) -> SipMessage:
         sock = self._require_socket()
-        while True:
-            data = sock.recv(65535)
-            if not data:
-                raise SipError("SIP TCP connection closed by peer")
-            messages = self._parser.feed(data)
-            if messages:
-                message = messages[0]
-                if self.dump_sip:
-                    LOGGER.info("SIP RECV\n%s", message.to_bytes().decode("utf-8", errors="replace"))
-                return message
+        original_timeout = sock.gettimeout()
+        if timeout_seconds is not None:
+            sock.settimeout(timeout_seconds)
+        try:
+            while True:
+                data = sock.recv(65535)
+                if not data:
+                    raise SipError("SIP TCP connection closed by peer")
+                messages = self._parser.feed(data)
+                if messages:
+                    message = messages[0]
+                    if self.dump_sip:
+                        LOGGER.info("SIP RECV\n%s", message.to_bytes().decode("utf-8", errors="replace"))
+                    return message
+        except TimeoutError as exc:
+            raise SipError(f"SIP receive timed out after {sock.gettimeout()} seconds") from exc
+        finally:
+            if timeout_seconds is not None:
+                sock.settimeout(original_timeout)
 
     def close(self) -> None:
         if self._sock is not None:

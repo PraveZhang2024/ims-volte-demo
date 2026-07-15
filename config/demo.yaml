@@ -18,6 +18,7 @@ subscriber:
 call:
   target_uri: "sip:+8616510000896@ims.mnc009.mcc404.3gppnetwork.org"
   duration_seconds: 30
+  setup_timeout_seconds: 120
   local_display_name: "IMS Demo UE"
   user_agent: "Xiaomi_Xiaomi 12T Pro_OS1.0.18.0.ULFEUXM"
 

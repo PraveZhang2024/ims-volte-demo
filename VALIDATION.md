@@ -112,6 +112,7 @@ sudo python3 main.py --config config/demo.yaml --mode call --log-level DEBUG
 Expected:
 
 - INVITE reaches the target IMPU.
+- The client waits up to `call.setup_timeout_seconds` for 18x/200 INVITE responses while the target rings.
 - 183 with SDP triggers PRACK if RSeq is present.
 - 200 INVITE triggers ACK.
 - RTP AMR-WB is sent every 20 ms.

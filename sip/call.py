@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import time
 
 from app.config import AppConfig
 from app.errors import SipError
@@ -55,8 +56,15 @@ class ImsCallClient:
         self.transport.send(invite)
 
         remote_media: RemoteMedia | None = None
+        deadline = time.monotonic() + self.config.call.setup_timeout_seconds
         while True:
-            response = self.transport.receive()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SipError(
+                    f"Timed out waiting for call setup after {self.config.call.setup_timeout_seconds} seconds"
+                )
+            LOGGER.info("Waiting for INVITE response, %.1f seconds remaining", remaining)
+            response = self.transport.receive(timeout_seconds=remaining)
             code = response.status_code
             if code is None:
                 self._handle_in_dialog_request(response)
