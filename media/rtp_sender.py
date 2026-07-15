@@ -85,7 +85,9 @@ class RtpSender:
             if self._owns_socket:
                 sock.bind((self.local_ip, self.local_port))
             LOGGER.info(
-                "RTP sender started: %s:%s -> %s:%s PT=%s SSRC=%s file=%s",
+                "RTP sender started: local_socket=%s:%s configured_local=%s:%s remote=%s:%s PT=%s SSRC=%s file=%s",
+                sock.getsockname()[0],
+                sock.getsockname()[1],
                 self.local_ip,
                 self.local_port,
                 self.remote_ip,

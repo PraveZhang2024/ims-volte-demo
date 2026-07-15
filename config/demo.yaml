@@ -58,5 +58,5 @@ debug:
   dump_sdp: true
   dump_xfrm_commands: true
   execute_xfrm_commands: true
-  capture_pcap: false
+  capture_pcap: true
   command_timeout_seconds: 10

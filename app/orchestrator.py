@@ -52,10 +52,16 @@ class ImsVolteOrchestrator:
         self._set_state(ClientState.NETWORK_READY)
         return interface.ipv4
 
-    def register(self, *, cleanup_on_exit: bool = True) -> RegistrationResult:
+    def register(
+        self,
+        *,
+        cleanup_on_exit: bool = True,
+        manage_capture: bool = True,
+    ) -> RegistrationResult:
         local_ip = self.network_check()
-        capture = self._capture()
-        capture.start()
+        capture = self._capture() if manage_capture else None
+        if capture:
+            capture.start()
         try:
             client = ImsRegistrationClient(
                 config=self.config,
@@ -70,21 +76,25 @@ class ImsVolteOrchestrator:
                 self._set_state(ClientState.REGISTERED)
             return result
         finally:
-            capture.stop()
+            if capture:
+                capture.stop()
             if cleanup_on_exit:
                 self.xfrm_manager.cleanup_all()
 
     def run_call(self) -> None:
-        registration = self.register(cleanup_on_exit=False)
-        if not registration.registered:
-            LOGGER.warning("Registration did not complete; call setup is skipped")
-            return
-
-        local_ip = registration.ids.local_ip
-        call_client = ImsCallClient(self.config, local_ip, transport=registration.protected_transport)
+        capture = self._capture()
+        capture.start()
         sender = None
         receiver = None
+        call_client = None
         try:
+            registration = self.register(cleanup_on_exit=False, manage_capture=False)
+            if not registration.registered:
+                LOGGER.warning("Registration did not complete; call setup is skipped")
+                return
+
+            local_ip = registration.ids.local_ip
+            call_client = ImsCallClient(self.config, local_ip, transport=registration.protected_transport)
             self._set_state(ClientState.INVITE_SENT)
             call = call_client.establish(registration.ids, registration.service_routes)
             self._set_state(ClientState.CALL_ESTABLISHED)
@@ -105,8 +115,10 @@ class ImsVolteOrchestrator:
                 sender.stop()
             if receiver:
                 receiver.stop()
-            call_client.close()
+            if call_client:
+                call_client.close()
             self.xfrm_manager.cleanup_all()
+            capture.stop()
 
     def _capture(self) -> TcpdumpCapture:
         return TcpdumpCapture(

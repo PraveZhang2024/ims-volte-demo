@@ -75,6 +75,13 @@ class ImsCallClient:
                 dialog.update_from_response(response)
                 if response.body:
                     remote_media = parse_remote_sdp(response.body)
+                    LOGGER.info(
+                        "Parsed early media SDP: remote=%s:%s PT=%s direction=%s",
+                        remote_media.ip,
+                        remote_media.port,
+                        remote_media.payload_type,
+                        remote_media.direction,
+                    )
                 rack = rack_from_response(response)
                 if rack:
                     request_uri = dialog.request_uri(self.config.call.target_uri)
@@ -101,6 +108,13 @@ class ImsCallClient:
                     dialog.update_from_response(response)
                     if response.body:
                         remote_media = parse_remote_sdp(response.body)
+                        LOGGER.info(
+                            "Parsed final media SDP: remote=%s:%s PT=%s direction=%s",
+                            remote_media.ip,
+                            remote_media.port,
+                            remote_media.payload_type,
+                            remote_media.direction,
+                        )
                     self.transport.send(
                         self.builder.ack(
                             ids,
