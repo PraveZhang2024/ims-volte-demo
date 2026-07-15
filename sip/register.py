@@ -36,6 +36,7 @@ class RegistrationResult:
     aka_result: AkaResult | None = None
     xfrm_context: XfrmContext | None = None
     final_response: SipMessage | None = None
+    protected_transport: SipTcpTransport | None = None
     stopped_before_protected_register: bool = False
 
 
@@ -92,7 +93,7 @@ class ImsRegistrationClient:
                 stopped_before_protected_register=True,
             )
 
-        final_response = self._send_protected_register(
+        final_response, protected_transport = self._send_protected_register(
             ids=ids,
             authorization=authorization,
             security_verify=build_security_verify(server_security),
@@ -110,6 +111,7 @@ class ImsRegistrationClient:
             aka_result=aka_result,
             xfrm_context=xfrm_context,
             final_response=final_response,
+            protected_transport=protected_transport,
         )
 
     def _send_initial_register(
@@ -117,7 +119,7 @@ class ImsRegistrationClient:
         ids: SipSessionIds,
         local_security: SecurityAssociation,
         security_client_header: str,
-    ) -> SipMessage:
+    ) -> tuple[SipMessage, SipTcpTransport]:
         builder = SipBuilder(self.config, self.local_ip, protected=False)
         message = builder.register(ids, security_client=security_client_header)
         transport = self._transport(local_port=self.config.network.local_sip_port)
@@ -145,9 +147,10 @@ class ImsRegistrationClient:
         try:
             transport.connect()
             transport.send(message)
-            return transport.receive()
-        finally:
+            return transport.receive(), transport
+        except Exception:
             transport.close()
+            raise
 
     def _transport(self, local_port: int) -> SipTcpTransport:
         return SipTcpTransport(

@@ -33,16 +33,19 @@ class SipTcpTransport:
         self._parser = SipStreamParser()
 
     def connect(self) -> None:
+        if self._sock is not None:
+            return
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.settimeout(self.timeout_seconds)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind((self.local_ip, self.local_port))
             sock.connect((self.remote_ip, self.remote_port))
         except OSError as exc:
             sock.close()
             raise SipError(
                 f"SIP TCP connect failed: {self.local_ip}:{self.local_port} -> "
-                f"{self.remote_ip}:{self.remote_port}"
+                f"{self.remote_ip}:{self.remote_port}: {exc}"
             ) from exc
         self._sock = sock
         LOGGER.info(

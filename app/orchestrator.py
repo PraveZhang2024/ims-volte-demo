@@ -81,7 +81,7 @@ class ImsVolteOrchestrator:
             return
 
         local_ip = registration.ids.local_ip
-        call_client = ImsCallClient(self.config, local_ip)
+        call_client = ImsCallClient(self.config, local_ip, transport=registration.protected_transport)
         sender = None
         receiver = None
         try:

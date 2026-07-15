@@ -28,11 +28,16 @@ class CallResult:
 
 
 class ImsCallClient:
-    def __init__(self, config: AppConfig, local_ip: str) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        local_ip: str,
+        transport: SipTcpTransport | None = None,
+    ) -> None:
         self.config = config
         self.local_ip = local_ip
         self.builder = SipBuilder(config, local_ip, protected=True)
-        self.transport = SipTcpTransport(
+        self.transport = transport or SipTcpTransport(
             local_ip=local_ip,
             local_port=config.network.local_protected_port,
             remote_ip=config.network.pcscf_ip,
