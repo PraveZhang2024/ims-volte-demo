@@ -25,7 +25,6 @@ ims:
   register_expires: 600000
   compact_headers: true
   initial_authorization: true
-  contact_user: "b787ec73-9c73-4fbd-a7c9-c4e060c03c64"
   contact_features:
     - '+g.3gpp.accesstype="cellular2"'
     - '+g.3gpp.ps-data-off="inactive"'

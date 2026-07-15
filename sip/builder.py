@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import secrets
+import uuid
 
 from app.config import AppConfig
 from sip.message import SipMessage
@@ -26,6 +27,7 @@ class SipSessionIds:
     local_ip: str
     call_id: str = ""
     from_tag: str = field(default_factory=new_tag)
+    contact_user: str = field(default_factory=lambda: str(uuid.uuid4()))
     cseq: int = 1
     method_cseq: dict[str, int] = field(default_factory=dict)
 
@@ -72,7 +74,7 @@ class SipBuilder:
         msg = SipMessage(f"REGISTER sip:{realm} SIP/2.0")
         self._base_headers(msg, ids, "REGISTER", impu)
         msg.add_header(self._h("To"), f"<{impu}>")
-        msg.add_header(self._h("Contact"), self._contact(expires=expires))
+        msg.add_header(self._h("Contact"), self._contact(ids, expires=expires))
         msg.add_header("Expires", str(expires))
         msg.add_header("Require", "sec-agree")
         msg.add_header("Proxy-Require", "sec-agree")
@@ -100,7 +102,7 @@ class SipBuilder:
         msg = SipMessage(f"INVITE {target} SIP/2.0", body=sdp_body)
         self._base_headers(msg, ids, "INVITE", target, route_set=route_set)
         msg.add_header("To", f"<{target}>")
-        msg.add_header("Contact", self._contact())
+        msg.add_header("Contact", self._contact(ids))
         msg.add_header("P-Preferred-Identity", f"<{self.config.subscriber.impu}>")
         msg.add_header("Supported", "100rel, timer")
         msg.add_header("Allow", "INVITE, ACK, PRACK, BYE, CANCEL, UPDATE")
@@ -166,8 +168,8 @@ class SipBuilder:
         msg.add_header("CSeq", f"{cseq} {method}")
         msg.add_header("User-Agent", self.config.call.user_agent)
 
-    def _contact(self, *, expires: int | None = None) -> str:
-        contact_user = self.config.ims.contact_user or self.config.subscriber.impi
+    def _contact(self, ids: SipSessionIds, *, expires: int | None = None) -> str:
+        contact_user = ids.contact_user
         features = self.config.ims.contact_features or [
             '+g.3gpp.icsi-ref="urn%3Aurn-7%3A3gpp-service.ims.icsi.mmtel"'
         ]
