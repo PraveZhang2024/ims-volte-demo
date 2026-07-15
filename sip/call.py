@@ -69,16 +69,14 @@ class ImsCallClient:
             if code is None:
                 self._handle_in_dialog_request(response)
                 continue
-            if code in (100, 180):
+            if 100 <= code < 200:
                 LOGGER.info("Received provisional response: %s", response.start_line)
-                dialog.update_from_response(response)
-                continue
-            if code == 183:
                 dialog.update_from_response(response)
                 if response.body:
                     remote_media = parse_remote_sdp(response.body)
                 rack = rack_from_response(response)
                 if rack:
+                    LOGGER.info("Sending PRACK for reliable provisional response: RAck=%s", rack)
                     self.transport.send(self.builder.prack(ids, dialog.dialog_to, rack, dialog.route_set))
                 continue
             if 200 <= code < 300:
@@ -98,6 +96,14 @@ class ImsCallClient:
                         remote_media=remote_media,
                         final_response=response,
                     )
+            if 300 <= code < 700 and response.method == "INVITE":
+                dialog.update_from_response(response)
+                if dialog.dialog_to:
+                    self.transport.send(self.builder.ack(ids, dialog.dialog_to, dialog.route_set))
+                raise SipError(
+                    f"INVITE failed with final response: {response.start_line}; "
+                    f"Reason={response.get('Reason', '')}; Warning={response.get('Warning', '')}"
+                )
             raise SipError(f"Unexpected SIP response during call setup: {response.start_line}")
 
     def run_media(self, remote_media: RemoteMedia) -> tuple[RtpSender, RtpReceiver]:
