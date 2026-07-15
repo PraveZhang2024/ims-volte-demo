@@ -1,4 +1,4 @@
-from aka.digest_akav1 import DigestCredentials, build_authorization, calculate_response
+from aka.digest_akav1 import DigestCredentials, build_authorization, calculate_response, digest_debug
 from aka.milenage_service import AkaResult
 from app.config import AppConfig, CallConfig, DebugConfig, ImsConfig, MediaConfig, NetworkConfig, SubscriberConfig
 from sip.register import ImsRegistrationClient
@@ -41,6 +41,24 @@ def test_digest_can_use_raw_res_bytes_as_password():
         nonce="nonce",
     )
     assert calculate_response(raw) != calculate_response(text)
+
+
+def test_digest_debug_exposes_inputs_and_matches_authorization_response():
+    credentials = DigestCredentials(
+        username="001@ims",
+        realm="ims",
+        uri="sip:ims",
+        method="REGISTER",
+        password="01020304",
+        nonce="nonce",
+        qop="auth",
+        cnonce="fixed",
+    )
+    debug = digest_debug(credentials)
+    header = build_authorization(credentials)
+    assert debug.ha1_input_debug == "001@ims:ims:01020304"
+    assert debug.ha2_input == "REGISTER:sip:ims"
+    assert f'response="{debug.response}"' in header
 
 
 def test_register_authorization_uri_matches_register_request_uri_when_challenge_realm_differs():

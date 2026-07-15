@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import logging
+import secrets
 
-from aka.digest_akav1 import DigestCredentials, build_authorization, calculate_response
+from aka.digest_akav1 import DigestCredentials, build_authorization, digest_debug
 from aka.milenage_service import AkaChallenge, AkaResult, MilenageService
 from app.config import AppConfig
 from app.errors import SipError
@@ -191,6 +192,7 @@ class ImsRegistrationClient:
         if qop and "," in qop:
             qop = "auth" if "auth" in [part.strip() for part in qop.split(",")] else qop.split(",")[0]
         request_uri = f"sip:{self.config.subscriber.realm}"
+        cnonce = secrets.token_hex(8) if qop else ""
         credentials = DigestCredentials(
             username=self.config.subscriber.impi,
             realm=realm,
@@ -201,9 +203,11 @@ class ImsRegistrationClient:
             algorithm=params.get("algorithm", "AKAv1-MD5"),
             qop=qop,
             opaque=params.get("opaque"),
+            cnonce=cnonce,
         )
         LOGGER.info("REGISTER digest uri=%s realm=%s", request_uri, realm)
-        self._log_digest_candidates(params, aka_result, request_uri, realm, qop)
+        self._log_digest_inputs("selected", self.config.ims.digest_res_encoding, credentials)
+        self._log_digest_candidates(params, aka_result, request_uri, realm, qop, cnonce)
         return build_authorization(credentials)
 
     def _digest_password(self, aka_result: AkaResult) -> str | bytes:
@@ -223,6 +227,7 @@ class ImsRegistrationClient:
         request_uri: str,
         realm: str,
         qop: str | None,
+        cnonce: str,
     ) -> None:
         # S-CSCF logs often include the expected digest response. These variants
         # make it possible to align the local RES encoding without packet guessing.
@@ -241,5 +246,53 @@ class ImsRegistrationClient:
                 algorithm=params.get("algorithm", "AKAv1-MD5"),
                 qop=qop,
                 opaque=params.get("opaque"),
+                cnonce=cnonce,
             )
-            LOGGER.info("Digest candidate res_encoding=%s response=%s", label, calculate_response(credentials))
+            self._log_digest_inputs("candidate", label, credentials)
+
+    def _log_digest_inputs(self, kind: str, label: str, credentials: DigestCredentials) -> None:
+        debug = digest_debug(credentials)
+        LOGGER.info(
+            "Digest %s res_encoding=%s username=%s realm=%s nonce=%s uri=%s method=%s "
+            "algorithm=%s qop=%s nc=%s cnonce=%s opaque=%s",
+            kind,
+            label,
+            debug.username,
+            debug.realm,
+            debug.nonce,
+            debug.uri,
+            debug.method,
+            debug.algorithm,
+            debug.qop,
+            debug.nc,
+            debug.cnonce,
+            debug.opaque,
+        )
+        LOGGER.info(
+            "Digest %s res_encoding=%s password_mode=%s password=%s",
+            kind,
+            label,
+            debug.password_mode,
+            debug.password_debug,
+        )
+        LOGGER.info(
+            "Digest %s res_encoding=%s HA1_input=%s HA1=%s",
+            kind,
+            label,
+            debug.ha1_input_debug,
+            debug.ha1,
+        )
+        LOGGER.info(
+            "Digest %s res_encoding=%s HA2_input=%s HA2=%s",
+            kind,
+            label,
+            debug.ha2_input,
+            debug.ha2,
+        )
+        LOGGER.info(
+            "Digest %s res_encoding=%s response_input=%s response=%s",
+            kind,
+            label,
+            debug.response_input,
+            debug.response,
+        )
