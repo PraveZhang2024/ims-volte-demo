@@ -10,7 +10,7 @@ def test_digest_authorization_contains_expected_fields():
         realm="ims",
         uri="sip:ims",
         method="REGISTER",
-        res_hex="01020304",
+        password="01020304",
         nonce="nonce",
         qop="auth",
         opaque="opaque",
@@ -21,6 +21,26 @@ def test_digest_authorization_contains_expected_fields():
     assert 'username="001@ims"' in header
     assert "algorithm=AKAv1-MD5" in header
     assert f'response="{calculate_response(credentials)}"' in header
+
+
+def test_digest_can_use_raw_res_bytes_as_password():
+    raw = DigestCredentials(
+        username="001@ims",
+        realm="ims",
+        uri="sip:ims",
+        method="REGISTER",
+        password=b"\x01\x02\x03\x04",
+        nonce="nonce",
+    )
+    text = DigestCredentials(
+        username="001@ims",
+        realm="ims",
+        uri="sip:ims",
+        method="REGISTER",
+        password="01020304",
+        nonce="nonce",
+    )
+    assert calculate_response(raw) != calculate_response(text)
 
 
 def test_register_authorization_uri_matches_register_request_uri_when_challenge_realm_differs():

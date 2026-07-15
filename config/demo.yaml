@@ -25,6 +25,7 @@ ims:
   register_expires: 600000
   compact_headers: true
   initial_authorization: true
+  digest_res_encoding: "hex_lower"
   contact_features:
     - '+g.3gpp.accesstype="cellular2"'
     - '+g.3gpp.ps-data-off="inactive"'

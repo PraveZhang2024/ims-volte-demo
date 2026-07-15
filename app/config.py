@@ -45,6 +45,7 @@ class ImsConfig:
     register_expires: int = 600000
     compact_headers: bool = True
     initial_authorization: bool = True
+    digest_res_encoding: str = "hex_lower"
     contact_features: list[str] = field(default_factory=list)
     security_client_algorithms: list[str] = field(default_factory=lambda: ["hmac-md5-96", "hmac-sha-1-96"])
     security_client_encryption_algorithms: list[str] = field(

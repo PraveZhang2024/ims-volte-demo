@@ -78,7 +78,11 @@ class XfrmManager:
         while self._installed_contexts:
             context = self._installed_contexts.pop()
             for command in self.build_cleanup_commands(context):
-                results.append(self.runner.run(command, check=False))
+                LOGGER.info("Cleaning XFRM: %s", " ".join(command))
+                result = self.runner.run(command, check=False)
+                if result.returncode != 0:
+                    LOGGER.warning("XFRM cleanup returned %s: %s", result.returncode, result.stderr.strip())
+                results.append(result)
         return results
 
     def build_setup_commands(self, context: XfrmContext) -> list[list[str]]:

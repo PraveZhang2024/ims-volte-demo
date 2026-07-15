@@ -22,7 +22,7 @@ class DigestCredentials:
     realm: str
     uri: str
     method: str
-    res_hex: str
+    password: str | bytes
     nonce: str
     algorithm: str = "AKAv1-MD5"
     qop: str | None = None
@@ -38,7 +38,7 @@ class DigestCredentials:
             realm=self.realm,
             uri=self.uri,
             method=self.method,
-            res_hex=self.res_hex,
+            password=self.password,
             nonce=self.nonce,
             algorithm=self.algorithm,
             qop=self.qop,
@@ -52,9 +52,19 @@ def md5_hex(value: str) -> str:
     return hashlib.md5(value.encode("utf-8")).hexdigest()
 
 
+def md5_hex_bytes(value: bytes) -> str:
+    return hashlib.md5(value).hexdigest()
+
+
 def calculate_response(credentials: DigestCredentials) -> str:
     credentials = credentials.with_cnonce()
-    ha1 = md5_hex(f"{credentials.username}:{credentials.realm}:{credentials.res_hex}")
+    if isinstance(credentials.password, bytes):
+        ha1_source = (
+            f"{credentials.username}:{credentials.realm}:".encode("utf-8") + credentials.password
+        )
+        ha1 = md5_hex_bytes(ha1_source)
+    else:
+        ha1 = md5_hex(f"{credentials.username}:{credentials.realm}:{credentials.password}")
     ha2 = md5_hex(f"{credentials.method}:{credentials.uri}")
     if credentials.qop:
         return md5_hex(

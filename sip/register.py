@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
 
-from aka.digest_akav1 import DigestCredentials, build_authorization
+from aka.digest_akav1 import DigestCredentials, build_authorization, calculate_response
 from aka.milenage_service import AkaChallenge, AkaResult, MilenageService
 from app.config import AppConfig
 from app.errors import SipError
@@ -196,11 +196,50 @@ class ImsRegistrationClient:
             realm=realm,
             uri=request_uri,
             method="REGISTER",
-            res_hex=aka_result.res_hex,
+            password=self._digest_password(aka_result),
             nonce=params["nonce"],
             algorithm=params.get("algorithm", "AKAv1-MD5"),
             qop=qop,
             opaque=params.get("opaque"),
         )
         LOGGER.info("REGISTER digest uri=%s realm=%s", request_uri, realm)
+        self._log_digest_candidates(params, aka_result, request_uri, realm, qop)
         return build_authorization(credentials)
+
+    def _digest_password(self, aka_result: AkaResult) -> str | bytes:
+        encoding = self.config.ims.digest_res_encoding
+        if encoding == "hex_lower":
+            return aka_result.res_hex
+        if encoding == "hex_upper":
+            return aka_result.res_hex.upper()
+        if encoding == "raw":
+            return aka_result.res
+        raise SipError(f"Unsupported ims.digest_res_encoding: {encoding}")
+
+    def _log_digest_candidates(
+        self,
+        params: dict[str, str],
+        aka_result: AkaResult,
+        request_uri: str,
+        realm: str,
+        qop: str | None,
+    ) -> None:
+        # S-CSCF logs often include the expected digest response. These variants
+        # make it possible to align the local RES encoding without packet guessing.
+        for label, password in (
+            ("hex_lower", aka_result.res_hex),
+            ("hex_upper", aka_result.res_hex.upper()),
+            ("raw", aka_result.res),
+        ):
+            credentials = DigestCredentials(
+                username=self.config.subscriber.impi,
+                realm=realm,
+                uri=request_uri,
+                method="REGISTER",
+                password=password,
+                nonce=params["nonce"],
+                algorithm=params.get("algorithm", "AKAv1-MD5"),
+                qop=qop,
+                opaque=params.get("opaque"),
+            )
+            LOGGER.info("Digest candidate res_encoding=%s response=%s", label, calculate_response(credentials))

@@ -52,7 +52,7 @@ class ImsVolteOrchestrator:
         self._set_state(ClientState.NETWORK_READY)
         return interface.ipv4
 
-    def register(self) -> RegistrationResult:
+    def register(self, *, cleanup_on_exit: bool = True) -> RegistrationResult:
         local_ip = self.network_check()
         capture = self._capture()
         capture.start()
@@ -71,9 +71,11 @@ class ImsVolteOrchestrator:
             return result
         finally:
             capture.stop()
+            if cleanup_on_exit:
+                self.xfrm_manager.cleanup_all()
 
     def run_call(self) -> None:
-        registration = self.register()
+        registration = self.register(cleanup_on_exit=False)
         if not registration.registered:
             LOGGER.warning("Registration did not complete; call setup is skipped")
             return
