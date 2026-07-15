@@ -219,7 +219,7 @@ def _linux_auth_alg(ims_alg: str) -> tuple[str, int]:
 def _linux_enc_alg(ims_ealg: str) -> tuple[str, bool]:
     normalized = ims_ealg.lower()
     if normalized == "null":
-        return "cipher_null", True
+        return "ecb(cipher_null)", True
     if normalized == "aes-cbc":
         return "cbc(aes)", False
     if normalized == "des-ede3-cbc":
@@ -229,7 +229,7 @@ def _linux_enc_alg(ims_ealg: str) -> tuple[str, bool]:
 
 def _enc_args(context: XfrmContext) -> list[str]:
     if context.use_null_encryption:
-        return ["enc", context.enc_alg, "0x"]
+        return ["enc", context.enc_alg, ""]
     return ["enc", context.enc_alg, _hex_key(context.ck_hex)]
 
 
