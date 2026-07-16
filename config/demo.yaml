@@ -1,25 +1,9 @@
 network:
-  interface: simu_37d27780
-  pcscf_ip: 10.2.30.160
-  pcscf_port: 5060
-  local_sip_port: 5060
-  local_protected_port: 15060
-  local_rtp_port: 40000
   connect_timeout_seconds: 5
 
-subscriber:
-  imsi: "404090110012679"
-  impi: "404090110012679@ims.mnc009.mcc404.3gppnetwork.org"
-  impu: "sip:+8615500084092@ims.mnc009.mcc404.3gppnetwork.org"
-  realm: "ims.mnc009.mcc404.3gppnetwork.org"
-  k: "8cc2c4b73281a1fe614eb3b4da9c72bc"
-  opc: "675bf1456b21e1b3efbd6343e8c88eba"
-
 call:
-  target_uri: "sip:+8616510010956@ims.mnc009.mcc404.3gppnetwork.org"
   setup_timeout_seconds: 120
   local_display_name: "IMS Demo UE"
-  user_agent: "Xiaomi_Xiaomi 12T Pro_OS1.0.18.0.ULFEUXM"
 
 ims:
   register_expires: 600000

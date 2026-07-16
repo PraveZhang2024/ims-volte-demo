@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import socket
 from typing import Any
+import uuid
 
 import yaml
 
@@ -36,7 +38,7 @@ class SubscriberConfig:
 class CallConfig:
     target_uri: str
     local_display_name: str
-    user_agent: str = "python-ims-volte-demo/0.1"
+    user_agent: str = field(default_factory=lambda: f"DEMO-{uuid.uuid4()}")
     setup_timeout_seconds: float = 120.0
 
 
@@ -99,7 +101,7 @@ class AppConfig:
         ]
 
 
-def load_config(path: str | Path) -> AppConfig:
+def load_config(path: str | Path, *, cli: dict[str, Any] | None = None) -> AppConfig:
     config_path = Path(path).expanduser().resolve()
     if not config_path.exists():
         raise ConfigError(f"Config file does not exist: {config_path}")
@@ -111,10 +113,11 @@ def load_config(path: str | Path) -> AppConfig:
         raise ConfigError("Config root must be a mapping")
 
     base_dir = config_path.parent.parent
+    cli = cli or {}
     return AppConfig(
-        network=_section(raw, "network", NetworkConfig),
-        subscriber=_section(raw, "subscriber", SubscriberConfig),
-        call=_section(raw, "call", CallConfig),
+        network=_network_config(raw, cli),
+        subscriber=_subscriber_config(cli),
+        call=_call_config(raw, cli),
         ims=_optional_section(raw, "ims", ImsConfig),
         media=_section(raw, "media", MediaConfig),
         debug=_section(raw, "debug", DebugConfig),
@@ -142,3 +145,67 @@ def _optional_section(raw: dict[str, Any], name: str, cls: type) -> Any:
         return cls(**value)
     except TypeError as exc:
         raise ConfigError(f"Invalid config section {name}: {exc}") from exc
+
+
+def _network_config(raw: dict[str, Any], cli: dict[str, Any]) -> NetworkConfig:
+    network = raw.get("network", {})
+    if not isinstance(network, dict):
+        raise ConfigError("Invalid config section network: expected mapping")
+    local_sip_port, local_protected_port, local_rtp_port = _random_local_ports()
+    return NetworkConfig(
+        interface=_required_cli(cli, "interface"),
+        pcscf_ip=_required_cli(cli, "pcscf_ip"),
+        pcscf_port=int(_required_cli(cli, "pcscf_port")),
+        local_sip_port=local_sip_port,
+        local_protected_port=local_protected_port,
+        local_rtp_port=local_rtp_port,
+        connect_timeout_seconds=network.get("connect_timeout_seconds", 5.0),
+    )
+
+
+def _subscriber_config(cli: dict[str, Any]) -> SubscriberConfig:
+    return SubscriberConfig(
+        imsi=_required_cli(cli, "imsi"),
+        impi=_required_cli(cli, "impi"),
+        impu=_required_cli(cli, "impu"),
+        realm=_required_cli(cli, "realm"),
+        k=_required_cli(cli, "k"),
+        opc=_required_cli(cli, "opc"),
+    )
+
+
+def _call_config(raw: dict[str, Any], cli: dict[str, Any]) -> CallConfig:
+    call = raw.get("call", {})
+    if not isinstance(call, dict):
+        raise ConfigError("Invalid config section call: expected mapping")
+    return CallConfig(
+        target_uri=_required_cli(cli, "target_uri"),
+        local_display_name=call.get("local_display_name", "IMS Demo UE"),
+        setup_timeout_seconds=call.get("setup_timeout_seconds", 120.0),
+    )
+
+
+def _required_cli(cli: dict[str, Any], name: str) -> Any:
+    value = cli.get(name)
+    if value is None or value == "":
+        raise ConfigError(f"Missing required command-line argument: --{name.replace('_', '-')}")
+    return value
+
+
+def _random_tcp_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("", 0))
+        return int(sock.getsockname()[1])
+
+
+def _random_udp_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.bind(("", 0))
+        return int(sock.getsockname()[1])
+
+
+def _random_local_ports() -> tuple[int, int, int]:
+    while True:
+        ports = (_random_tcp_port(), _random_tcp_port(), _random_udp_port())
+        if len(set(ports)) == 3:
+            return ports

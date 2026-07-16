@@ -8,17 +8,22 @@ Run these commands on the Linux host where srsUE owns the IMS APN interface.
 python3 -m pip install -r requirements.txt
 ```
 
-Edit `config/demo.yaml`:
+Set runtime network and subscriber arguments:
 
-- `network.interface`
-- `network.pcscf_ip`
-- `subscriber.imsi`
-- `subscriber.impi`
-- `subscriber.impu`
-- `subscriber.realm`
-- `subscriber.k`
-- `subscriber.opc`
-- `call.target_uri`
+```bash
+COMMON_ARGS="--interface simu_37d27780 \
+  --pcscf-ip 10.2.30.160 \
+  --pcscf-port 5060 \
+  --imsi 404090110012679 \
+  --impi 404090110012679@ims.mnc009.mcc404.3gppnetwork.org \
+  --impu sip:+8615500084092@ims.mnc009.mcc404.3gppnetwork.org \
+  --realm ims.mnc009.mcc404.3gppnetwork.org \
+  --k <hex-k> \
+  --opc <hex-opc> \
+  --target-uri sip:+8616510010956@ims.mnc009.mcc404.3gppnetwork.org"
+```
+
+Local clear SIP, protected SIP, and RTP ports are randomly assigned at startup.
 
 Keep this disabled for the first pass:
 
@@ -30,7 +35,7 @@ debug:
 ## 2. Configuration Summary
 
 ```bash
-python3 main.py --config config/demo.yaml --mode summary
+python3 main.py --config config/demo.yaml $COMMON_ARGS --mode summary
 ```
 
 Expected: the client prints interface, P-CSCF, subscriber, target, media, and
@@ -48,7 +53,7 @@ tests pass.
 ## 4. Network Check
 
 ```bash
-python3 main.py --config config/demo.yaml --mode network-check
+python3 main.py --config config/demo.yaml $COMMON_ARGS --mode network-check
 ```
 
 Expected:
@@ -60,7 +65,7 @@ Expected:
 ## 5. Initial REGISTER And Dry-Run XFRM
 
 ```bash
-python3 main.py --config config/demo.yaml --mode register --log-level DEBUG
+python3 main.py --config config/demo.yaml $COMMON_ARGS --mode register --log-level DEBUG
 ```
 
 Expected:
@@ -85,7 +90,7 @@ debug:
 Then run:
 
 ```bash
-sudo python3 main.py --config config/demo.yaml --mode register --log-level DEBUG
+sudo python3 main.py --config config/demo.yaml $COMMON_ARGS --mode register --log-level DEBUG
 ```
 
 Expected:
@@ -106,7 +111,7 @@ ffmpeg -y -i input.wav -ar 16000 -ac 1 -c:a libvo_amrwbenc media_files/send.amr
 Then run:
 
 ```bash
-sudo python3 main.py --config config/demo.yaml --mode call --duration-seconds 30 --log-level DEBUG
+sudo python3 main.py --config config/demo.yaml $COMMON_ARGS --mode call --duration-seconds 30 --log-level DEBUG
 ```
 
 Use `--duration-seconds 0` to loop `media_files/send.amr` until remote BYE,
@@ -133,7 +138,7 @@ ffmpeg -y -i media_files/received.amr received.wav
 Register and wait for an inbound call:
 
 ```bash
-sudo python3 main.py --config config/demo.yaml --mode listen --log-level DEBUG
+sudo python3 main.py --config config/demo.yaml $COMMON_ARGS --mode listen --log-level DEBUG
 ```
 
 Expected:

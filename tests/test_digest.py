@@ -67,9 +67,9 @@ def test_register_authorization_uri_matches_register_request_uri_when_challenge_
             interface="ims0",
             pcscf_ip="10.0.0.2",
             pcscf_port=5060,
-            local_sip_port=5060,
-            local_protected_port=15060,
-            local_rtp_port=40000,
+            local_sip_port=25060,
+            local_protected_port=25061,
+            local_rtp_port=24000,
         ),
         subscriber=SubscriberConfig(
             imsi="00101",

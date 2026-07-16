@@ -17,6 +17,16 @@ DEFAULT_CALL_DURATION_SECONDS = 30.0
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Python IMS VoLTE demo client")
     parser.add_argument("--config", default="config/demo.yaml", help="Path to demo YAML config")
+    parser.add_argument("--interface", required=True, help="IMS APN interface name")
+    parser.add_argument("--pcscf-ip", required=True, help="P-CSCF IP address")
+    parser.add_argument("--pcscf-port", required=True, type=int, help="P-CSCF SIP port")
+    parser.add_argument("--imsi", required=True, help="Subscriber IMSI")
+    parser.add_argument("--impi", required=True, help="Subscriber private identity")
+    parser.add_argument("--impu", required=True, help="Subscriber public identity")
+    parser.add_argument("--realm", required=True, help="IMS realm")
+    parser.add_argument("--k", required=True, help="Subscriber K hex")
+    parser.add_argument("--opc", required=True, help="Subscriber OPc hex")
+    parser.add_argument("--target-uri", required=True, help="Target URI for outgoing calls")
     parser.add_argument(
         "--mode",
         choices=("summary", "network-check", "register", "call", "listen"),
@@ -57,7 +67,21 @@ def main() -> int:
     configure_signal_handlers()
 
     try:
-        config = load_config(args.config)
+        config = load_config(
+            args.config,
+            cli={
+                "interface": args.interface,
+                "pcscf_ip": args.pcscf_ip,
+                "pcscf_port": args.pcscf_port,
+                "imsi": args.imsi,
+                "impi": args.impi,
+                "impu": args.impu,
+                "realm": args.realm,
+                "k": args.k,
+                "opc": args.opc,
+                "target_uri": args.target_uri,
+            },
+        )
         orchestrator = ImsVolteOrchestrator(config)
 
         if args.mode == "summary":

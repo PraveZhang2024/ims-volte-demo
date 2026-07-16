@@ -20,36 +20,55 @@ Install dependencies on the Linux host that runs srsUE:
 python3 -m pip install -r requirements.txt
 ```
 
-Edit `config/demo.yaml` with your IMS APN interface, P-CSCF address,
-subscriber credentials, and call target.
+Edit `config/demo.yaml` for non-secret defaults such as media files, debug
+flags, and IMS header preferences. Runtime network and subscriber values are
+required command-line arguments.
+
+Example required arguments:
+
+```bash
+COMMON_ARGS="--interface simu_37d27780 \
+  --pcscf-ip 10.2.30.160 \
+  --pcscf-port 5060 \
+  --imsi 404090110012679 \
+  --impi 404090110012679@ims.mnc009.mcc404.3gppnetwork.org \
+  --impu sip:+8615500084092@ims.mnc009.mcc404.3gppnetwork.org \
+  --realm ims.mnc009.mcc404.3gppnetwork.org \
+  --k <hex-k> \
+  --opc <hex-opc> \
+  --target-uri sip:+8616510010956@ims.mnc009.mcc404.3gppnetwork.org"
+```
+
+Local clear SIP, protected SIP, and RTP ports are randomly assigned at startup.
+The SIP `User-Agent` is generated as `DEMO-<uuid>`.
 
 Start with a configuration summary:
 
 ```bash
-python3 main.py --config config/demo.yaml --mode summary
+python3 main.py --config config/demo.yaml $COMMON_ARGS --mode summary
 ```
 
 Then validate each stage in order:
 
 ```bash
-python3 main.py --config config/demo.yaml --mode network-check
-python3 main.py --config config/demo.yaml --mode register
-python3 main.py --config config/demo.yaml --mode call
-python3 main.py --config config/demo.yaml --mode listen
+python3 main.py --config config/demo.yaml $COMMON_ARGS --mode network-check
+python3 main.py --config config/demo.yaml $COMMON_ARGS --mode register
+python3 main.py --config config/demo.yaml $COMMON_ARGS --mode call
+python3 main.py --config config/demo.yaml $COMMON_ARGS --mode listen
 ```
 
 Set the call duration from the command line. By default, call mode runs for
 30 seconds if `--duration-seconds` is omitted.
 
 ```bash
-python3 main.py --config config/demo.yaml --mode call --duration-seconds 60
+python3 main.py --config config/demo.yaml $COMMON_ARGS --mode call --duration-seconds 60
 ```
 
 Use a non-positive value to keep looping `media_files/send.amr` until the
 remote side sends BYE or the process receives Ctrl+C/SIGTERM:
 
 ```bash
-python3 main.py --config config/demo.yaml --mode call --duration-seconds 0
+python3 main.py --config config/demo.yaml $COMMON_ARGS --mode call --duration-seconds 0
 ```
 
 `debug.execute_xfrm_commands` is `false` by default. Keep it disabled until
