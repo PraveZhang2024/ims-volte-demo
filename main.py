@@ -26,10 +26,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--realm", required=True, help="IMS realm")
     parser.add_argument("--k", required=True, help="Subscriber K hex")
     parser.add_argument("--opc", required=True, help="Subscriber OPc hex")
-    parser.add_argument("--target-uri", default="", help="Target URI for outgoing calls; required for --mode call")
+    parser.add_argument("--target-uri", default="", help="Target URI for outgoing calls/SMS")
     parser.add_argument(
         "--mode",
-        choices=("summary", "network-check", "register", "call", "listen"),
+        choices=("summary", "network-check", "register", "call", "listen", "send-sms"),
         default="summary",
         help="Validation stage to run",
     )
@@ -67,8 +67,8 @@ def main() -> int:
     configure_signal_handlers()
 
     try:
-        if args.mode == "call" and not args.target_uri:
-            raise ImsClientError("--target-uri is required for --mode call")
+        if args.mode in ("call", "send-sms") and not args.target_uri:
+            raise ImsClientError(f"--target-uri is required for --mode {args.mode}")
         config = load_config(
             args.config,
             cli={
@@ -103,6 +103,8 @@ def main() -> int:
             orchestrator.run_call(duration_seconds=duration_seconds)
         elif args.mode == "listen":
             orchestrator.run_listen()
+        elif args.mode == "send-sms":
+            orchestrator.send_sms()
         else:
             raise ImsClientError(f"Unsupported mode: {args.mode}")
     except ImsClientError as exc:

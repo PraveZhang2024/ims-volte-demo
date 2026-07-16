@@ -13,6 +13,7 @@ from network.interface import InterfaceResolver
 from network.route import RouteChecker
 from sip.call import ImsCallClient
 from sip.register import ImsRegistrationClient, RegistrationResult
+from sip.sms import DEFAULT_SMS_TEXT, ImsSmsClient
 from tools.capture import TcpdumpCapture
 from tools.command import CommandRunner
 
@@ -209,6 +210,31 @@ class ImsVolteOrchestrator:
             capture.stop()
             if call is not None:
                 self._set_state(ClientState.TERMINATED)
+
+    def send_sms(self) -> None:
+        capture = self._capture()
+        capture.start()
+        sms_client = None
+        try:
+            registration = self.register(cleanup_on_exit=False, manage_capture=False)
+            if not registration.registered:
+                LOGGER.warning("Registration did not complete; SMS send is skipped")
+                return
+
+            local_ip = registration.ids.local_ip
+            sms_client = ImsSmsClient(self.config, local_ip, transport=registration.protected_transport)
+            sms_client.send_text_message(
+                registration.ids,
+                registration.service_routes,
+                target_uri=self.config.call.target_uri,
+                text=DEFAULT_SMS_TEXT,
+            )
+            self._set_state(ClientState.SMS_SENT)
+        finally:
+            if sms_client:
+                sms_client.close()
+            self.xfrm_manager.cleanup_all()
+            capture.stop()
 
     def _capture(self) -> TcpdumpCapture:
         return TcpdumpCapture(
