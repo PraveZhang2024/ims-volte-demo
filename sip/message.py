@@ -23,7 +23,7 @@ HEADER_ALIASES = {
 class SipMessage:
     start_line: str
     headers: list[tuple[str, str]] = field(default_factory=list)
-    body: str | bytes = ""
+    body: str = ""
 
     def add_header(self, name: str, value: str) -> None:
         self.headers.append((name, value))
@@ -67,20 +67,15 @@ class SipMessage:
     def with_content_length(self) -> "SipMessage":
         filtered = [(k, v) for k, v in self.headers if k.lower() not in ("content-length", "l")]
         self.headers = filtered
-        self.headers.append(("l", str(len(self.body_bytes()))))
+        self.headers.append(("l", str(len(self.body.encode("utf-8")))))
         return self
-
-    def body_bytes(self) -> bytes:
-        if isinstance(self.body, bytes):
-            return self.body
-        return self.body.encode("utf-8")
 
     def to_bytes(self) -> bytes:
         self.with_content_length()
         lines = [self.start_line]
         lines.extend(f"{name}: {value}" for name, value in self.headers)
-        header_bytes = (CRLF.join(lines) + CRLF + CRLF).encode("utf-8")
-        return header_bytes + self.body_bytes()
+        text = CRLF.join(lines) + CRLF + CRLF + self.body
+        return text.encode("utf-8")
 
 
 def format_params(params: dict[str, str | int | bool | None]) -> str:

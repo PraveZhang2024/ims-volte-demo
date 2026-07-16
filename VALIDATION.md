@@ -135,22 +135,7 @@ Convert received audio:
 ffmpeg -y -i media_files/received.amr received.wav
 ```
 
-## 8. SMS Over SIP
-
-Send a UCS-2 text SMS payload after protected registration:
-
-```bash
-sudo python3 main.py --config config/demo.yaml $COMMON_ARGS $TARGET_ARG --mode send-sms --log-level DEBUG
-```
-
-Expected:
-
-- Protected REGISTER returns 200 OK.
-- A SIP MESSAGE request is sent to `--target-uri`.
-- The MESSAGE body is `你好` encoded as UCS-2/UTF-16BE with `Content-Type: text/plain;charset=UTF-16BE`.
-- IMS returns a 2xx response for MESSAGE.
-
-## 9. Listen Mode
+## 8. Listen Mode
 
 Register and wait for an inbound call:
 

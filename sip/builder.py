@@ -158,25 +158,6 @@ class SipBuilder:
         msg.add_header("To", dialog_to)
         return msg
 
-    def message(
-        self,
-        ids: SipSessionIds,
-        body: bytes,
-        *,
-        target: str | None = None,
-        route_set: list[str] | None = None,
-        content_type: str = "text/plain;charset=UTF-16BE",
-    ) -> SipMessage:
-        target_uri = target or self.config.call.target_uri
-        msg = SipMessage(f"MESSAGE {target_uri} SIP/2.0", body=body)
-        self._base_headers(msg, ids, "MESSAGE", target_uri, route_set=route_set)
-        msg.add_header("To", f"<{target_uri}>")
-        msg.add_header("Contact", self._contact(ids))
-        msg.add_header("P-Preferred-Identity", f"<{self.config.subscriber.impu}>")
-        msg.add_header("Accept-Contact", "*;+g.3gpp.smsip")
-        msg.add_header("Content-Type", content_type)
-        return msg
-
     def response_to_request(
         self,
         request: SipMessage,

@@ -57,7 +57,6 @@ python3 main.py --config config/demo.yaml $COMMON_ARGS --mode network-check
 python3 main.py --config config/demo.yaml $COMMON_ARGS --mode register
 python3 main.py --config config/demo.yaml $COMMON_ARGS $TARGET_ARG --mode call
 python3 main.py --config config/demo.yaml $COMMON_ARGS --mode listen
-python3 main.py --config config/demo.yaml $COMMON_ARGS $TARGET_ARG --mode send-sms
 ```
 
 Set the call duration from the command line. By default, call mode runs for
@@ -100,9 +99,3 @@ saved to `received.amr`.
 
 Stop with Ctrl+C or SIGTERM. If a call is active, the client attempts to send
 BYE, stops RTP, closes SIP, removes XFRM state/policy, and stops capture.
-
-## SMS Mode
-
-`send-sms` registers the UE, keeps the protected SIP TCP connection open after
-the 200 OK REGISTER response, and sends one SIP `MESSAGE` request to
-`--target-uri`. The message body is the text `你好` encoded as UCS-2/UTF-16BE.
