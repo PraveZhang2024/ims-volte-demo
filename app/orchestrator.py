@@ -87,6 +87,9 @@ class ImsVolteOrchestrator:
         sender = None
         receiver = None
         call_client = None
+        registration = None
+        call = None
+        remote_ended = False
         try:
             registration = self.register(cleanup_on_exit=False, manage_capture=False)
             if not registration.registered:
@@ -102,7 +105,6 @@ class ImsVolteOrchestrator:
             sender, receiver = call_client.run_media(call.remote_media)
             self._set_state(ClientState.MEDIA_RUNNING)
             media_until = time.monotonic() + self.config.call.duration_seconds
-            keep_running = True
             while time.monotonic() < media_until:
                 keep_running = call_client.poll_during_media(
                     registration.ids,
@@ -110,25 +112,32 @@ class ImsVolteOrchestrator:
                     timeout_seconds=0.5,
                 )
                 if not keep_running:
+                    remote_ended = True
                     break
-
-            self._set_state(ClientState.TERMINATING)
-            if sender:
-                sender.stop()
-            if keep_running:
-                call_client.bye(registration.ids, call.dialog)
-            if receiver:
-                receiver.stop()
-            self._set_state(ClientState.TERMINATED)
         finally:
+            if call is not None:
+                self._set_state(ClientState.TERMINATING)
             if sender:
                 sender.stop()
+            if call_client and registration and call and not remote_ended:
+                try:
+                    call_client.bye(
+                        registration.ids,
+                        call.dialog,
+                        timeout_seconds=self.config.network.connect_timeout_seconds,
+                    )
+                except Exception as exc:
+                    LOGGER.warning("Failed to send BYE during shutdown: %s", exc)
+            if call_client:
+                call_client.drain_pending_sip(max_seconds=1.0)
             if receiver:
                 receiver.stop()
             if call_client:
                 call_client.close()
             self.xfrm_manager.cleanup_all()
             capture.stop()
+            if call is not None:
+                self._set_state(ClientState.TERMINATED)
 
     def _capture(self) -> TcpdumpCapture:
         return TcpdumpCapture(

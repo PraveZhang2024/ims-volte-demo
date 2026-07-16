@@ -164,7 +164,7 @@ class ImsCallClient:
         sender.start()
         return sender, receiver
 
-    def bye(self, ids: SipSessionIds, dialog: SipDialog) -> SipMessage:
+    def bye(self, ids: SipSessionIds, dialog: SipDialog, *, timeout_seconds: float | None = None) -> SipMessage | None:
         self.transport.send(
             self.builder.bye(
                 ids,
@@ -174,11 +174,34 @@ class ImsCallClient:
             )
         )
         while True:
-            response = self.transport.receive()
+            try:
+                response = self.transport.receive(timeout_seconds=timeout_seconds)
+            except SipReceiveTimeout:
+                LOGGER.warning("Timed out waiting for 200 OK to BYE")
+                return None
             if response.status_code == 200 and response.method == "BYE":
                 return response
             if response.method == "BYE" and response.status_code is None:
                 self._handle_in_dialog_request(response)
+
+    def drain_pending_sip(self, *, max_seconds: float = 1.0) -> None:
+        deadline = time.monotonic() + max_seconds
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            try:
+                message = self.transport.receive(timeout_seconds=min(0.2, remaining))
+            except SipReceiveTimeout:
+                return
+            except SipError as exc:
+                LOGGER.info("Stopped draining SIP messages: %s", exc)
+                return
+
+            LOGGER.info("Drained pending SIP message before shutdown: %s", message.start_line)
+            if message.status_code is None and message.method == "BYE":
+                self.transport.send(self.builder.ok_response(message))
+                LOGGER.info("Answered drained BYE with 200 OK")
 
     def poll_during_media(self, ids: SipSessionIds, dialog: SipDialog, *, timeout_seconds: float = 0.5) -> bool:
         try:

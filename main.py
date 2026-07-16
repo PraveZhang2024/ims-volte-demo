@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import signal
 import sys
 
 from app.config import load_config
@@ -32,9 +33,20 @@ def configure_logging(level_name: str) -> None:
     )
 
 
+def configure_signal_handlers() -> None:
+    def _raise_keyboard_interrupt(signum: int, _frame: object) -> None:
+        raise KeyboardInterrupt(f"signal {signum}")
+
+    for signal_name in ("SIGTERM", "SIGINT"):
+        signum = getattr(signal, signal_name, None)
+        if signum is not None:
+            signal.signal(signum, _raise_keyboard_interrupt)
+
+
 def main() -> int:
     args = parse_args()
     configure_logging(args.log_level)
+    configure_signal_handlers()
 
     try:
         config = load_config(args.config)
