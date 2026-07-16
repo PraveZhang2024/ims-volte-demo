@@ -95,7 +95,6 @@ class ImsVolteOrchestrator:
         sender = None
         receiver = None
         call_client = None
-        sms_client = None
         registration = None
         call = None
         remote_ended = False
@@ -191,7 +190,6 @@ class ImsVolteOrchestrator:
         sender = None
         receiver = None
         call_client = None
-        sms_client = None
         registration = None
         call = None
         remote_ended = False
@@ -201,18 +199,10 @@ class ImsVolteOrchestrator:
                 LOGGER.warning("Registration did not complete; listen mode is skipped")
                 return
 
-            LOGGER.info("Protected SIP connection established; waiting for inbound call or SMS")
+            LOGGER.info("Protected SIP connection established; waiting for inbound call")
             local_ip = registration.ids.local_ip
             call_client = ImsCallClient(self.config, local_ip, transport=registration.protected_transport)
-            sms_client = ImsSmsClient(self.config, local_ip, transport=registration.protected_transport)
-            call = call_client.wait_for_incoming_call(
-                registration.ids,
-                request_handler=lambda request: sms_client.handle_inbound_message(
-                    registration.ids,
-                    request,
-                    service_routes=registration.service_routes,
-                ),
-            )
+            call = call_client.wait_for_incoming_call(registration.ids)
             self._set_state(ClientState.CALL_ESTABLISHED)
 
             sender, receiver = call_client.run_media(call.remote_media)
@@ -246,8 +236,6 @@ class ImsVolteOrchestrator:
                 receiver.stop()
             if call_client:
                 call_client.close()
-            elif sms_client:
-                sms_client.close()
             self.xfrm_manager.cleanup_all()
             capture.stop()
             if call is not None:

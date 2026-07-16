@@ -7,7 +7,6 @@ import logging
 import random
 import socket
 import time
-from typing import Callable
 
 from app.config import AppConfig
 from app.errors import SipError, SipReceiveTimeout
@@ -149,12 +148,7 @@ class ImsCallClient:
                 )
             raise SipError(f"Unexpected SIP response during call setup: {response.start_line}")
 
-    def wait_for_incoming_call(
-        self,
-        registration_ids: SipSessionIds,
-        *,
-        request_handler: Callable[[SipMessage], bool] | None = None,
-    ) -> CallResult:
+    def wait_for_incoming_call(self, registration_ids: SipSessionIds) -> CallResult:
         LOGGER.info("Waiting for incoming INVITE")
         while True:
             try:
@@ -168,8 +162,6 @@ class ImsCallClient:
                 LOGGER.info("Received ACK for a completed/cancelled inbound INVITE while listening")
                 continue
             if request.method != "INVITE":
-                if request_handler and request_handler(request):
-                    continue
                 LOGGER.info("Ignoring non-INVITE request while listening: %s", request.start_line)
                 continue
 
