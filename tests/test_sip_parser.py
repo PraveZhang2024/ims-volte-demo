@@ -23,3 +23,18 @@ def test_stream_parser_handles_split_and_coalesced_messages():
     assert parser.feed(one[:10]) == []
     messages = parser.feed(one[10:] + two)
     assert [msg.status_code for msg in messages] == [100, 180]
+
+
+def test_parse_binary_sms_body_keeps_bytes():
+    raw = (
+        b"MESSAGE sip:user@example.test SIP/2.0\r\n"
+        b"Content-Type: application/vnd.3gpp.sms\r\n"
+        b"Content-Length: 2\r\n"
+        b"\r\n"
+        b"\x01\x02"
+    )
+
+    msg = parse_sip_message(raw)
+
+    assert msg.method == "MESSAGE"
+    assert msg.body == b"\x01\x02"
