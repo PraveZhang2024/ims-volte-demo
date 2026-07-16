@@ -50,6 +50,7 @@ class RtpSender:
         self.packets_sent = 0
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._media_lock = threading.Lock()
 
     @classmethod
     def from_config(
@@ -81,6 +82,20 @@ class RtpSender:
         if self._thread:
             self._thread.join(timeout=2)
 
+    def update_remote_media(self, remote_media: RemoteMedia) -> None:
+        with self._media_lock:
+            old = (self.remote_ip, self.remote_port, self.payload_type, self.octet_aligned)
+            self.remote_ip = remote_media.ip
+            self.remote_port = remote_media.port
+            self.payload_type = remote_media.payload_type
+            self.octet_aligned = remote_media.octet_aligned
+            new = (self.remote_ip, self.remote_port, self.payload_type, self.octet_aligned)
+        LOGGER.warning(
+            "Updated RTP sender media: old=%s:%s/PT%s/align%s new=%s:%s/PT%s/align%s",
+            *old,
+            *new,
+        )
+
     def _run(self) -> None:
         sock = self._sock or socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         reader = AmrWbFileReader(self.amr_path, loop=True)
@@ -106,16 +121,21 @@ class RtpSender:
                 frame = reader.read_frame()
                 if frame is None:
                     break
-                payload = frame_to_rtp_payload(frame, octet_aligned=self.octet_aligned)
+                with self._media_lock:
+                    remote_ip = self.remote_ip
+                    remote_port = self.remote_port
+                    payload_type = self.payload_type
+                    octet_aligned = self.octet_aligned
+                payload = frame_to_rtp_payload(frame, octet_aligned=octet_aligned)
                 packet = RtpPacket(
-                    payload_type=self.payload_type,
+                    payload_type=payload_type,
                     sequence=self.sequence,
                     timestamp=self.timestamp,
                     ssrc=self.ssrc,
                     payload=payload,
                     marker=self.packets_sent == 0,
                 )
-                sock.sendto(packet.to_bytes(), (self.remote_ip, self.remote_port))
+                sock.sendto(packet.to_bytes(), (remote_ip, remote_port))
                 self.packets_sent += 1
                 if self.packets_sent == 1 or self.packets_sent % 100 == 0:
                     LOGGER.info(

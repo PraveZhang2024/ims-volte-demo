@@ -71,6 +71,19 @@ class RtpReceiver:
         if self._thread:
             self._thread.join(timeout=2)
 
+    def update_remote_media(self, remote_media: RemoteMedia) -> None:
+        old_pt = self.payload_type
+        old_align = self.octet_aligned
+        self.payload_type = remote_media.payload_type
+        self.octet_aligned = remote_media.octet_aligned
+        LOGGER.warning(
+            "Updated RTP receiver media: old_PT=%s old_align=%s new_PT=%s new_align=%s",
+            old_pt,
+            old_align,
+            self.payload_type,
+            self.octet_aligned,
+        )
+
     def _run(self) -> None:
         sock = self._sock or socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         writer = AmrWbFileWriter(self.output_path)

@@ -125,6 +125,8 @@ class ImsVolteOrchestrator:
                 keep_running = call_client.poll_during_media(
                     call.ids,
                     call.dialog,
+                    sender=sender,
+                    receiver=receiver,
                     timeout_seconds=0.5,
                 )
                 if not keep_running:
@@ -221,6 +223,8 @@ class ImsVolteOrchestrator:
                 keep_running = call_client.poll_during_media(
                     call.ids,
                     call.dialog,
+                    sender=sender,
+                    receiver=receiver,
                     timeout_seconds=0.5,
                 )
                 if not keep_running:

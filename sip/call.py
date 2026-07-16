@@ -46,6 +46,7 @@ class ImsCallClient:
         self.config = config
         self.local_ip = local_ip
         self.builder = SipBuilder(config, local_ip, protected=True)
+        self._awaiting_reinvite_answer = False
         self.transport = transport or SipTcpTransport(
             local_ip=local_ip,
             local_port=config.network.local_protected_port,
@@ -346,7 +347,15 @@ class ImsCallClient:
                 self.transport.send(self.builder.ok_response(message))
                 LOGGER.info("Answered drained BYE with 200 OK")
 
-    def poll_during_media(self, ids: SipSessionIds, dialog: SipDialog, *, timeout_seconds: float = 0.5) -> bool:
+    def poll_during_media(
+        self,
+        ids: SipSessionIds,
+        dialog: SipDialog,
+        *,
+        sender: RtpSender,
+        receiver: RtpReceiver,
+        timeout_seconds: float = 0.5,
+    ) -> bool:
         try:
             message = self.transport.receive(timeout_seconds=timeout_seconds)
         except SipReceiveTimeout:
@@ -359,15 +368,41 @@ class ImsCallClient:
         method = message.method
         LOGGER.info("Received in-dialog request during media: %s", message.start_line)
         if method == "INVITE":
-            sdp_offer = build_amrwb_offer(self.config, self.local_ip)
-            self.transport.send(self.builder.ok_response(message, body=sdp_offer, ids=ids))
-            LOGGER.info("Answered re-INVITE with 200 OK and local SDP offer")
+            if message.body:
+                remote_media = parse_remote_sdp(message.body)
+                sdp_answer = build_amrwb_offer(
+                    self.config,
+                    self.local_ip,
+                    octet_align=remote_media.octet_aligned,
+                    payload_type=remote_media.payload_type,
+                )
+                self.transport.send(self.builder.ok_response(message, body=sdp_answer, ids=ids))
+                self._apply_remote_media(remote_media, sender, receiver, source="re-INVITE offer")
+                self._awaiting_reinvite_answer = False
+                LOGGER.info("Answered re-INVITE SDP offer with 200 OK SDP answer")
+            else:
+                sdp_offer = build_amrwb_offer(
+                    self.config,
+                    self.local_ip,
+                    octet_align=sender.octet_aligned,
+                    payload_type=sender.payload_type,
+                )
+                self.transport.send(self.builder.ok_response(message, body=sdp_offer, ids=ids))
+                self._awaiting_reinvite_answer = True
+                LOGGER.info("Answered offerless re-INVITE with 200 OK SDP offer; waiting for ACK SDP answer")
             return True
         if method == "UPDATE":
             self.transport.send(self.builder.ok_response(message, ids=ids))
             LOGGER.info("Answered UPDATE with 200 OK")
             return True
         if method == "ACK":
+            if self._awaiting_reinvite_answer and message.body:
+                remote_media = parse_remote_sdp(message.body)
+                self._apply_remote_media(remote_media, sender, receiver, source="ACK SDP answer")
+                self._awaiting_reinvite_answer = False
+            elif self._awaiting_reinvite_answer:
+                LOGGER.warning("ACK for offerless re-INVITE had no SDP answer; keeping current RTP settings")
+                self._awaiting_reinvite_answer = False
             LOGGER.info("Received ACK for in-dialog transaction")
             return True
         if method == "BYE":
@@ -377,6 +412,26 @@ class ImsCallClient:
 
         LOGGER.info("Ignoring unsupported in-dialog request: %s", message.start_line)
         return True
+
+    def _apply_remote_media(
+        self,
+        remote_media: RemoteMedia,
+        sender: RtpSender,
+        receiver: RtpReceiver,
+        *,
+        source: str,
+    ) -> None:
+        LOGGER.warning(
+            "Applying negotiated media from %s: remote=%s:%s PT=%s octet_align=%s direction=%s",
+            source,
+            remote_media.ip,
+            remote_media.port,
+            remote_media.payload_type,
+            remote_media.octet_aligned,
+            remote_media.direction,
+        )
+        sender.update_remote_media(remote_media)
+        receiver.update_remote_media(remote_media)
 
     def close(self) -> None:
         self.transport.close()
