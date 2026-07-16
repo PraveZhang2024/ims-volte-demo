@@ -57,6 +57,8 @@ python3 main.py --config config/demo.yaml $COMMON_ARGS --mode network-check
 python3 main.py --config config/demo.yaml $COMMON_ARGS --mode register
 python3 main.py --config config/demo.yaml $COMMON_ARGS $TARGET_ARG --mode call
 python3 main.py --config config/demo.yaml $COMMON_ARGS --mode listen
+python3 main.py --config config/demo.yaml $COMMON_ARGS --mode send-sms \
+  --smsc 8613900139000 --target-msisdn 8616510000896 --content "hello"
 ```
 
 Set the call duration from the command line. By default, call mode runs for
@@ -75,6 +77,15 @@ python3 main.py --config config/demo.yaml $COMMON_ARGS $TARGET_ARG --mode call -
 
 `debug.execute_xfrm_commands` is `false` by default. Keep it disabled until
 the generated commands have been checked against your capture and lab setup.
+
+## Send SMS Mode
+
+`send-sms` registers the UE, waits for the protected REGISTER to receive 200 OK,
+then sends a SIP `MESSAGE` to the SMSC. `--smsc` and `--target-msisdn` must be
+digits only. The SIP Request-URI and `To` header use the SMSC as `tel:+<smsc>`;
+the target MSISDN is encoded inside the GSM SMS RP-DATA/SMS-SUBMIT body. The
+text from `--content` is encoded as UCS-2 and sent with
+`Content-Type: application/vnd.3gpp.sms`.
 
 ## Expected Lab Flow
 

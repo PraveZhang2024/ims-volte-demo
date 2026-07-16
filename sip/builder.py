@@ -158,6 +158,27 @@ class SipBuilder:
         msg.add_header("To", dialog_to)
         return msg
 
+    def message(
+        self,
+        ids: SipSessionIds,
+        *,
+        request_uri: str,
+        to_uri: str,
+        body: bytes,
+        route_set: list[str] | None = None,
+    ) -> SipMessage:
+        msg = SipMessage(f"MESSAGE {request_uri} SIP/2.0", body=body)
+        self._base_headers(msg, ids, "MESSAGE", request_uri, route_set=route_set)
+        msg.add_header("To", f"<{to_uri}>")
+        msg.add_header("Request-Disposition", "no-fork")
+        msg.add_header("Accept-Contact", "*;+g.3gpp.smsip")
+        msg.add_header("Allow", "ACK,BYE,CANCEL,INFO,INVITE,MESSAGE,NOTIFY,OPTIONS,PRACK,REFER,UPDATE")
+        msg.add_header("P-Preferred-Identity", f"<{self.config.subscriber.impu}>")
+        msg.add_header("P-Access-Network-Info", "3GPP-E-UTRAN-FDD")
+        msg.add_header("Supported", "100rel,path,replaces")
+        msg.add_header("Content-Type", "application/vnd.3gpp.sms")
+        return msg
+
     def response_to_request(
         self,
         request: SipMessage,

@@ -27,9 +27,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--k", required=True, help="Subscriber K hex")
     parser.add_argument("--opc", required=True, help="Subscriber OPc hex")
     parser.add_argument("--target-uri", default="", help="Target URI for outgoing calls; required for --mode call")
+    parser.add_argument("--smsc", default="", help="SMSC MSISDN digits; required for --mode send-sms")
+    parser.add_argument("--target-msisdn", default="", help="SMS target MSISDN digits; required for --mode send-sms")
+    parser.add_argument("--content", default="", help="SMS text content; required for --mode send-sms")
     parser.add_argument(
         "--mode",
-        choices=("summary", "network-check", "register", "call", "listen"),
+        choices=("summary", "network-check", "register", "call", "listen", "send-sms"),
         default="summary",
         help="Validation stage to run",
     )
@@ -61,6 +64,18 @@ def configure_signal_handlers() -> None:
             signal.signal(signum, _raise_keyboard_interrupt)
 
 
+def validate_sms_args(args: argparse.Namespace) -> None:
+    if not args.smsc:
+        raise ImsClientError("--smsc is required for --mode send-sms")
+    if not args.target_msisdn:
+        raise ImsClientError("--target-msisdn is required for --mode send-sms")
+    if args.content == "":
+        raise ImsClientError("--content is required for --mode send-sms")
+    for name, value in (("--smsc", args.smsc), ("--target-msisdn", args.target_msisdn)):
+        if not value.isascii() or not value.isdigit():
+            raise ImsClientError(f"{name} must contain digits only")
+
+
 def main() -> int:
     args = parse_args()
     configure_logging(args.log_level)
@@ -69,6 +84,8 @@ def main() -> int:
     try:
         if args.mode == "call" and not args.target_uri:
             raise ImsClientError("--target-uri is required for --mode call")
+        if args.mode == "send-sms":
+            validate_sms_args(args)
         config = load_config(
             args.config,
             cli={
@@ -103,6 +120,12 @@ def main() -> int:
             orchestrator.run_call(duration_seconds=duration_seconds)
         elif args.mode == "listen":
             orchestrator.run_listen()
+        elif args.mode == "send-sms":
+            orchestrator.run_send_sms(
+                smsc=args.smsc,
+                target_msisdn=args.target_msisdn,
+                content=args.content,
+            )
         else:
             raise ImsClientError(f"Unsupported mode: {args.mode}")
     except ImsClientError as exc:
