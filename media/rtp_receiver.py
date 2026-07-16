@@ -8,6 +8,7 @@ import socket
 import threading
 
 from app.config import AppConfig
+from app.errors import MediaError
 from media.amrwb_file import AmrWbFileWriter
 from media.amrwb_payload import rtp_payload_to_frame
 from media.rtp_packet import RtpPacket
@@ -102,10 +103,9 @@ class RtpReceiver:
                         packet.timestamp,
                         len(packet.payload),
                     )
-                if packet.payload_type != self.payload_type:
-                    LOGGER.debug("Ignoring RTP payload type %s", packet.payload_type)
+                frame = self._decode_packet_payload(packet)
+                if frame is None:
                     continue
-                frame = rtp_payload_to_frame(packet.payload, octet_aligned=self.octet_aligned)
                 writer.write_frame(frame)
                 self.frames_written += 1
         finally:
@@ -117,3 +117,27 @@ class RtpReceiver:
                 self.packets_received,
                 self.frames_written,
             )
+
+    def _decode_packet_payload(self, packet: RtpPacket):
+        if packet.payload_type == self.payload_type:
+            return rtp_payload_to_frame(packet.payload, octet_aligned=self.octet_aligned)
+
+        if 96 <= packet.payload_type <= 127:
+            for octet_aligned in (self.octet_aligned, not self.octet_aligned):
+                try:
+                    frame = rtp_payload_to_frame(packet.payload, octet_aligned=octet_aligned)
+                except MediaError:
+                    continue
+                LOGGER.warning(
+                    "Learned AMR-WB RTP payload type from incoming packet: old_PT=%s new_PT=%s old_octet_align=%s new_octet_align=%s",
+                    self.payload_type,
+                    packet.payload_type,
+                    self.octet_aligned,
+                    octet_aligned,
+                )
+                self.payload_type = packet.payload_type
+                self.octet_aligned = octet_aligned
+                return frame
+
+        LOGGER.debug("Ignoring RTP payload type %s, expected %s", packet.payload_type, self.payload_type)
+        return None
