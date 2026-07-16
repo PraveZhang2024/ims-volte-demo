@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 import socket
+import time
 
 from app.errors import NetworkError
 from network.interface import bindable_tcp_socket
@@ -41,21 +42,44 @@ class RouteChecker:
         remote_ip: str,
         remote_port: int,
         timeout_seconds: float,
+        attempts: int = 3,
     ) -> None:
-        sock = bindable_tcp_socket(local_ip, local_port)
-        try:
-            sock.settimeout(timeout_seconds)
-            sock.connect((remote_ip, remote_port))
-            LOGGER.info(
-                "TCP connect succeeded: %s:%s -> %s:%s",
-                local_ip,
-                local_port,
-                remote_ip,
-                remote_port,
-            )
-        except OSError as exc:
-            raise NetworkError(
-                f"TCP connect failed: {local_ip}:{local_port} -> {remote_ip}:{remote_port}"
-            ) from exc
-        finally:
-            sock.close()
+        last_error: OSError | None = None
+        for attempt in range(1, attempts + 1):
+            sock = bindable_tcp_socket(local_ip, local_port)
+            actual_local_ip, actual_local_port = sock.getsockname()
+            try:
+                sock.settimeout(timeout_seconds)
+                sock.connect((remote_ip, remote_port))
+                actual_local_ip, actual_local_port = sock.getsockname()
+                LOGGER.info(
+                    "TCP connect succeeded on attempt %s/%s: %s:%s -> %s:%s",
+                    attempt,
+                    attempts,
+                    actual_local_ip,
+                    actual_local_port,
+                    remote_ip,
+                    remote_port,
+                )
+                return
+            except OSError as exc:
+                last_error = exc
+                LOGGER.warning(
+                    "TCP connect attempt %s/%s failed: %s:%s -> %s:%s: %s",
+                    attempt,
+                    attempts,
+                    actual_local_ip,
+                    actual_local_port,
+                    remote_ip,
+                    remote_port,
+                    exc,
+                )
+                if attempt < attempts:
+                    time.sleep(0.5)
+            finally:
+                sock.close()
+
+        raise NetworkError(
+            f"TCP connect failed after {attempts} attempts: {local_ip}:<ephemeral> "
+            f"-> {remote_ip}:{remote_port}: {last_error}"
+        )
