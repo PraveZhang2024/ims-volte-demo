@@ -114,7 +114,7 @@ class ImsVolteOrchestrator:
 
             while media_until is None or time.monotonic() < media_until:
                 keep_running = call_client.poll_during_media(
-                    registration.ids,
+                    call.ids,
                     call.dialog,
                     timeout_seconds=0.5,
                 )
@@ -129,12 +129,69 @@ class ImsVolteOrchestrator:
             if call_client and registration and call and not remote_ended:
                 try:
                     call_client.bye(
-                        registration.ids,
+                        call.ids,
                         call.dialog,
                         timeout_seconds=self.config.network.connect_timeout_seconds,
                     )
                 except Exception as exc:
                     LOGGER.warning("Failed to send BYE during shutdown: %s", exc)
+            if call_client:
+                call_client.drain_pending_sip(max_seconds=1.0)
+            if receiver:
+                receiver.stop()
+            if call_client:
+                call_client.close()
+            self.xfrm_manager.cleanup_all()
+            capture.stop()
+            if call is not None:
+                self._set_state(ClientState.TERMINATED)
+
+    def run_listen(self) -> None:
+        capture = self._capture()
+        capture.start()
+        sender = None
+        receiver = None
+        call_client = None
+        registration = None
+        call = None
+        remote_ended = False
+        try:
+            registration = self.register(cleanup_on_exit=False, manage_capture=False)
+            if not registration.registered:
+                LOGGER.warning("Registration did not complete; listen mode is skipped")
+                return
+
+            LOGGER.info("Protected SIP connection established; waiting for inbound call")
+            local_ip = registration.ids.local_ip
+            call_client = ImsCallClient(self.config, local_ip, transport=registration.protected_transport)
+            call = call_client.wait_for_incoming_call(registration.ids)
+            self._set_state(ClientState.CALL_ESTABLISHED)
+
+            sender, receiver = call_client.run_media(call.remote_media)
+            self._set_state(ClientState.MEDIA_RUNNING)
+            while True:
+                keep_running = call_client.poll_during_media(
+                    call.ids,
+                    call.dialog,
+                    timeout_seconds=0.5,
+                )
+                if not keep_running:
+                    remote_ended = True
+                    break
+        finally:
+            if call is not None:
+                self._set_state(ClientState.TERMINATING)
+            if sender:
+                sender.stop()
+            if call_client and registration and call and not remote_ended:
+                try:
+                    call_client.bye(
+                        call.ids,
+                        call.dialog,
+                        timeout_seconds=self.config.network.connect_timeout_seconds,
+                    )
+                except Exception as exc:
+                    LOGGER.warning("Failed to send BYE during listen shutdown: %s", exc)
             if call_client:
                 call_client.drain_pending_sip(max_seconds=1.0)
             if receiver:

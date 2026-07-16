@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import random
 import socket
 import time
 
@@ -13,7 +14,7 @@ from media.rtp_receiver import RtpReceiver
 from media.rtp_sender import RtpSender
 from sdp.builder import build_amrwb_offer
 from sdp.parser import RemoteMedia, parse_remote_sdp
-from sip.builder import SipBuilder, SipSessionIds
+from sip.builder import SipBuilder, SipSessionIds, new_tag
 from sip.dialog import SipDialog, rack_from_response
 from sip.message import SipMessage
 from sip.transport import SipTcpTransport
@@ -25,6 +26,7 @@ LOGGER = logging.getLogger(__name__)
 class CallResult:
     established: bool
     dialog: SipDialog
+    ids: SipSessionIds
     remote_media: RemoteMedia | None = None
     final_response: SipMessage | None = None
 
@@ -128,6 +130,7 @@ class ImsCallClient:
                     return CallResult(
                         established=True,
                         dialog=dialog,
+                        ids=ids,
                         remote_media=remote_media,
                         final_response=response,
                     )
@@ -140,6 +143,80 @@ class ImsCallClient:
                     f"Reason={response.get('Reason', '')}; Warning={response.get('Warning', '')}"
                 )
             raise SipError(f"Unexpected SIP response during call setup: {response.start_line}")
+
+    def wait_for_incoming_call(self, registration_ids: SipSessionIds) -> CallResult:
+        LOGGER.info("Waiting for incoming INVITE")
+        while True:
+            request = self.transport.receive(timeout_seconds=None)
+            if request.status_code is not None:
+                LOGGER.info("Ignoring SIP response while listening: %s", request.start_line)
+                continue
+            if request.method != "INVITE":
+                LOGGER.info("Ignoring non-INVITE request while listening: %s", request.start_line)
+                continue
+
+            if not request.body:
+                raise SipError("Incoming INVITE has no SDP offer")
+            remote_media = parse_remote_sdp(request.body)
+            local_tag = new_tag()
+            ids = SipSessionIds(
+                local_ip=self.local_ip,
+                call_id=request.get("Call-ID", "") or "",
+                from_tag=local_tag,
+                contact_user=registration_ids.contact_user,
+            )
+            dialog = SipDialog.from_incoming_invite(request, local_tag=local_tag)
+
+            self.transport.send(
+                self.builder.response_to_request(
+                    request,
+                    status_code=180,
+                    reason="Ringing",
+                    ids=ids,
+                    to_tag=local_tag,
+                )
+            )
+            delay = random.uniform(1, 5)
+            LOGGER.info("Incoming call received; answering after %.1f seconds", delay)
+            time.sleep(delay)
+
+            sdp_answer = build_amrwb_offer(self.config, self.local_ip)
+            self.transport.send(
+                self.builder.ok_response(
+                    request,
+                    body=sdp_answer,
+                    ids=ids,
+                    to_tag=local_tag,
+                )
+            )
+            LOGGER.info("Sent 200 OK for incoming INVITE; waiting for ACK")
+
+            self._wait_for_ack(dialog)
+            LOGGER.info("Incoming call established")
+            return CallResult(
+                established=True,
+                dialog=dialog,
+                ids=ids,
+                remote_media=remote_media,
+                final_response=None,
+            )
+
+    def _wait_for_ack(self, dialog: SipDialog) -> None:
+        deadline = time.monotonic() + self.config.call.setup_timeout_seconds
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SipError("Timed out waiting for ACK to incoming INVITE")
+            message = self.transport.receive(timeout_seconds=remaining)
+            if message.status_code is not None:
+                LOGGER.info("Ignoring SIP response while waiting for ACK: %s", message.start_line)
+                continue
+            if message.method == "ACK":
+                return
+            if message.method == "BYE":
+                self.transport.send(self.builder.ok_response(message))
+                raise SipError("Remote sent BYE before ACK")
+            LOGGER.info("Ignoring request while waiting for ACK: %s", message.start_line)
 
     def run_media(self, remote_media: RemoteMedia) -> tuple[RtpSender, RtpReceiver]:
         LOGGER.info(

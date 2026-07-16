@@ -127,3 +127,19 @@ Convert received audio:
 ```bash
 ffmpeg -y -i media_files/received.amr received.wav
 ```
+
+## 8. Listen Mode
+
+Register and wait for an inbound call:
+
+```bash
+sudo python3 main.py --config config/demo.yaml --mode listen --log-level DEBUG
+```
+
+Expected:
+
+- Protected SIP connection is established and the client logs that it is waiting for inbound calls.
+- On inbound INVITE, the client sends 180 Ringing.
+- After a random 1-5 second delay, the client sends 200 OK with local AMR-WB SDP.
+- After ACK, RTP starts: `send.amr` is looped and remote audio is saved to `media_files/received.amr`.
+- Ctrl+C/SIGTERM or remote BYE stops RTP, drains SIP briefly, closes sockets, cleans XFRM, and stops pcap capture.

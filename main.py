@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default="config/demo.yaml", help="Path to demo YAML config")
     parser.add_argument(
         "--mode",
-        choices=("summary", "network-check", "register", "call"),
+        choices=("summary", "network-check", "register", "call", "listen"),
         default="summary",
         help="Validation stage to run",
     )
@@ -75,6 +75,8 @@ def main() -> int:
                     duration_seconds,
                 )
             orchestrator.run_call(duration_seconds=duration_seconds)
+        elif args.mode == "listen":
+            orchestrator.run_listen()
         else:
             raise ImsClientError(f"Unsupported mode: {args.mode}")
     except ImsClientError as exc:

@@ -31,6 +31,22 @@ class SipDialog:
     def request_uri(self, fallback: str) -> str:
         return self.remote_target or fallback
 
+    @classmethod
+    def from_incoming_invite(cls, request: SipMessage, *, local_tag: str) -> "SipDialog":
+        from_value = request.get("From", "") or ""
+        remote_tag = ""
+        if ";tag=" in from_value:
+            remote_tag = from_value.split(";tag=", 1)[1].split(";", 1)[0]
+        contact = request.get("Contact", "") or ""
+        return cls(
+            call_id=request.get("Call-ID", "") or "",
+            local_tag=local_tag,
+            remote_tag=remote_tag,
+            route_set=request.get_all("Record-Route"),
+            remote_target=extract_sip_uri(contact) if contact else "",
+            dialog_to=from_value,
+        )
+
 
 def rack_from_response(response: SipMessage) -> str | None:
     rseq = response.get("RSeq")

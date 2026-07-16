@@ -158,10 +158,21 @@ class SipBuilder:
         msg.add_header("To", dialog_to)
         return msg
 
-    def ok_response(self, request: SipMessage, *, body: str = "", ids: SipSessionIds | None = None) -> SipMessage:
-        msg = SipMessage("SIP/2.0 200 OK", body=body)
+    def response_to_request(
+        self,
+        request: SipMessage,
+        *,
+        status_code: int,
+        reason: str,
+        body: str = "",
+        ids: SipSessionIds | None = None,
+        to_tag: str | None = None,
+    ) -> SipMessage:
+        msg = SipMessage(f"SIP/2.0 {status_code} {reason}", body=body)
         for header in ("Via", "From", "To", "Call-ID", "CSeq"):
             for value in request.get_all(header):
+                if header == "To" and to_tag and ";tag=" not in value:
+                    value = f"{value};tag={to_tag}"
                 msg.add_header(header, value)
         if ids is not None:
             msg.add_header("Contact", self._contact(ids))
@@ -170,6 +181,23 @@ class SipBuilder:
         if body:
             msg.add_header("Content-Type", "application/sdp")
         return msg
+
+    def ok_response(
+        self,
+        request: SipMessage,
+        *,
+        body: str = "",
+        ids: SipSessionIds | None = None,
+        to_tag: str | None = None,
+    ) -> SipMessage:
+        return self.response_to_request(
+            request,
+            status_code=200,
+            reason="OK",
+            body=body,
+            ids=ids,
+            to_tag=to_tag,
+        )
 
     def _base_headers(
         self,

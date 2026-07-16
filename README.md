@@ -35,6 +35,7 @@ Then validate each stage in order:
 python3 main.py --config config/demo.yaml --mode network-check
 python3 main.py --config config/demo.yaml --mode register
 python3 main.py --config config/demo.yaml --mode call
+python3 main.py --config config/demo.yaml --mode listen
 ```
 
 Set the call duration from the command line. By default, call mode runs for
@@ -66,3 +67,14 @@ the generated commands have been checked against your capture and lab setup.
 8. INVITE/PRACK/ACK establishes the call.
 9. AMR-WB RTP is sent and received.
 10. BYE terminates the call and resources are cleaned up.
+
+## Listen Mode
+
+`listen` registers the UE, keeps the protected SIP TCP connection open, and
+waits for an inbound INVITE. When an INVITE arrives, the client sends 180
+Ringing, waits a random 1-5 seconds, sends 200 OK with local AMR-WB SDP, waits
+for ACK, then starts RTP. `send.amr` is looped to the caller and remote RTP is
+saved to `received.amr`.
+
+Stop with Ctrl+C or SIGTERM. If a call is active, the client attempts to send
+BYE, stops RTP, closes SIP, removes XFRM state/policy, and stops capture.
