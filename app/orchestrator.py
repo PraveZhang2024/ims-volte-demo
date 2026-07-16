@@ -41,7 +41,7 @@ class ImsVolteOrchestrator:
         if not interface.is_up:
             LOGGER.warning("IMS interface %s is not marked UP", interface.name)
         route_checker = RouteChecker(self.command_runner)
-        # route_checker.check_route(self.config.network.pcscf_ip, self.config.network.interface)
+        route_checker.check_route(self.config.network.pcscf_ip, self.config.network.interface)
         route_checker.check_tcp_connect(
             local_ip=interface.ipv4,
             local_port=0,
