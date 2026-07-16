@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--realm", required=True, help="IMS realm")
     parser.add_argument("--k", required=True, help="Subscriber K hex")
     parser.add_argument("--opc", required=True, help="Subscriber OPc hex")
-    parser.add_argument("--target-uri", required=True, help="Target URI for outgoing calls")
+    parser.add_argument("--target-uri", default="", help="Target URI for outgoing calls; required for --mode call")
     parser.add_argument(
         "--mode",
         choices=("summary", "network-check", "register", "call", "listen"),
@@ -67,6 +67,8 @@ def main() -> int:
     configure_signal_handlers()
 
     try:
+        if args.mode == "call" and not args.target_uri:
+            raise ImsClientError("--target-uri is required for --mode call")
         config = load_config(
             args.config,
             cli={

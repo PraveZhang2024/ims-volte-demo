@@ -179,7 +179,7 @@ def _call_config(raw: dict[str, Any], cli: dict[str, Any]) -> CallConfig:
     if not isinstance(call, dict):
         raise ConfigError("Invalid config section call: expected mapping")
     return CallConfig(
-        target_uri=_required_cli(cli, "target_uri"),
+        target_uri=cli.get("target_uri") or "",
         local_display_name=call.get("local_display_name", "IMS Demo UE"),
         setup_timeout_seconds=call.get("setup_timeout_seconds", 120.0),
     )

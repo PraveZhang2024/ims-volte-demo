@@ -19,8 +19,9 @@ COMMON_ARGS="--interface simu_37d27780 \
   --impu sip:+8615500084092@ims.mnc009.mcc404.3gppnetwork.org \
   --realm ims.mnc009.mcc404.3gppnetwork.org \
   --k <hex-k> \
-  --opc <hex-opc> \
-  --target-uri sip:+8616510010956@ims.mnc009.mcc404.3gppnetwork.org"
+  --opc <hex-opc>"
+
+TARGET_ARG="--target-uri sip:+8616510010956@ims.mnc009.mcc404.3gppnetwork.org"
 ```
 
 Local clear SIP, protected SIP, and RTP ports are randomly assigned at startup.
@@ -111,7 +112,7 @@ ffmpeg -y -i input.wav -ar 16000 -ac 1 -c:a libvo_amrwbenc media_files/send.amr
 Then run:
 
 ```bash
-sudo python3 main.py --config config/demo.yaml $COMMON_ARGS --mode call --duration-seconds 30 --log-level DEBUG
+sudo python3 main.py --config config/demo.yaml $COMMON_ARGS $TARGET_ARG --mode call --duration-seconds 30 --log-level DEBUG
 ```
 
 Use `--duration-seconds 0` to loop `media_files/send.amr` until remote BYE,

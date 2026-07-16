@@ -35,8 +35,9 @@ COMMON_ARGS="--interface simu_37d27780 \
   --impu sip:+8615500084092@ims.mnc009.mcc404.3gppnetwork.org \
   --realm ims.mnc009.mcc404.3gppnetwork.org \
   --k <hex-k> \
-  --opc <hex-opc> \
-  --target-uri sip:+8616510010956@ims.mnc009.mcc404.3gppnetwork.org"
+  --opc <hex-opc>"
+
+TARGET_ARG="--target-uri sip:+8616510010956@ims.mnc009.mcc404.3gppnetwork.org"
 ```
 
 Local clear SIP, protected SIP, and RTP ports are randomly assigned at startup.
@@ -53,7 +54,7 @@ Then validate each stage in order:
 ```bash
 python3 main.py --config config/demo.yaml $COMMON_ARGS --mode network-check
 python3 main.py --config config/demo.yaml $COMMON_ARGS --mode register
-python3 main.py --config config/demo.yaml $COMMON_ARGS --mode call
+python3 main.py --config config/demo.yaml $COMMON_ARGS $TARGET_ARG --mode call
 python3 main.py --config config/demo.yaml $COMMON_ARGS --mode listen
 ```
 
@@ -61,14 +62,14 @@ Set the call duration from the command line. By default, call mode runs for
 30 seconds if `--duration-seconds` is omitted.
 
 ```bash
-python3 main.py --config config/demo.yaml $COMMON_ARGS --mode call --duration-seconds 60
+python3 main.py --config config/demo.yaml $COMMON_ARGS $TARGET_ARG --mode call --duration-seconds 60
 ```
 
 Use a non-positive value to keep looping `media_files/send.amr` until the
 remote side sends BYE or the process receives Ctrl+C/SIGTERM:
 
 ```bash
-python3 main.py --config config/demo.yaml $COMMON_ARGS --mode call --duration-seconds 0
+python3 main.py --config config/demo.yaml $COMMON_ARGS $TARGET_ARG --mode call --duration-seconds 0
 ```
 
 `debug.execute_xfrm_commands` is `false` by default. Keep it disabled until
