@@ -11,8 +11,7 @@ python3 -m pip install -r requirements.txt
 Set runtime network and subscriber arguments:
 
 ```bash
-COMMON_ARGS="--interface simu_37d27780 \
-  --pcscf-ip 10.2.30.160 \
+COMMON_ARGS="--pcscf-ip 10.2.30.160 \
   --pcscf-port 5060 \
   --imsi 404090110012679 \
   --impi 404090110012679@ims.mnc009.mcc404.3gppnetwork.org \
@@ -25,6 +24,8 @@ TARGET_ARG="--target-uri sip:+8616510010956@ims.mnc009.mcc404.3gppnetwork.org"
 ```
 
 Local clear SIP, protected SIP, and RTP ports are randomly assigned at startup.
+`--interface` is optional. If omitted, the client uses the system default route
+to reach the P-CSCF.
 
 Keep this disabled for the first pass:
 

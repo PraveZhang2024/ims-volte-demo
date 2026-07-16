@@ -35,6 +35,12 @@ class RouteChecker:
         LOGGER.info("Route to P-CSCF uses %s: %s", interface, output)
         return RouteCheck(pcscf_ip=pcscf_ip, interface=interface, output=output)
 
+    def log_route(self, pcscf_ip: str) -> RouteCheck:
+        result = self.runner.run(["ip", "route", "get", pcscf_ip])
+        output = result.stdout.strip()
+        LOGGER.info("Route to P-CSCF: %s", output)
+        return RouteCheck(pcscf_ip=pcscf_ip, interface="", output=output)
+
     def check_tcp_connect(
         self,
         local_ip: str,

@@ -17,7 +17,7 @@ DEFAULT_CALL_DURATION_SECONDS = 30.0
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Python IMS VoLTE demo client")
     parser.add_argument("--config", default="config/demo.yaml", help="Path to demo YAML config")
-    parser.add_argument("--interface", required=True, help="IMS APN interface name")
+    parser.add_argument("--interface", default="", help="Optional IMS APN interface name")
     parser.add_argument("--pcscf-ip", required=True, help="P-CSCF IP address")
     parser.add_argument("--pcscf-port", required=True, type=int, help="P-CSCF SIP port")
     parser.add_argument("--imsi", required=True, help="Subscriber IMSI")

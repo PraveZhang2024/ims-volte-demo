@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import socket
 import time
 
 from app.config import AppConfig
@@ -37,20 +38,26 @@ class ImsVolteOrchestrator:
             print(line)
 
     def network_check(self) -> str:
-        interface = InterfaceResolver(self.command_runner).get_ipv4(self.config.network.interface)
-        if not interface.is_up:
-            LOGGER.warning("IMS interface %s is not marked UP", interface.name)
         route_checker = RouteChecker(self.command_runner)
-        route_checker.check_route(self.config.network.pcscf_ip, self.config.network.interface)
+        if self.config.network.interface:
+            interface = InterfaceResolver(self.command_runner).get_ipv4(self.config.network.interface)
+            if not interface.is_up:
+                LOGGER.warning("IMS interface %s is not marked UP", interface.name)
+            route_checker.check_route(self.config.network.pcscf_ip, self.config.network.interface)
+            local_ip = interface.ipv4
+        else:
+            LOGGER.info("No IMS interface specified; using system default route")
+            route_checker.log_route(self.config.network.pcscf_ip)
+            local_ip = self._default_source_ip(self.config.network.pcscf_ip, self.config.network.pcscf_port)
         route_checker.check_tcp_connect(
-            local_ip=interface.ipv4,
+            local_ip=local_ip,
             local_port=0,
             remote_ip=self.config.network.pcscf_ip,
             remote_port=self.config.network.pcscf_port,
             timeout_seconds=self.config.network.connect_timeout_seconds,
         )
         self._set_state(ClientState.NETWORK_READY)
-        return interface.ipv4
+        return local_ip
 
     def register(
         self,
@@ -213,3 +220,13 @@ class ImsVolteOrchestrator:
     def _set_state(self, state: ClientState) -> None:
         self.state = state
         LOGGER.info("State -> %s", state.value)
+
+    def _default_source_ip(self, remote_ip: str, remote_port: int) -> str:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.connect((remote_ip, remote_port))
+            local_ip = sock.getsockname()[0]
+            LOGGER.info("Resolved default-route local IP for P-CSCF: %s", local_ip)
+            return local_ip
+        finally:
+            sock.close()

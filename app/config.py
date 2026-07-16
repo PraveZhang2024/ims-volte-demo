@@ -89,7 +89,7 @@ class AppConfig:
 
     def summary_lines(self) -> list[str]:
         return [
-            f"IMS interface: {self.network.interface}",
+            f"IMS interface: {self.network.interface or '<system default route>'}",
             f"P-CSCF: {self.network.pcscf_ip}:{self.network.pcscf_port}",
             f"Local SIP ports: clear={self.network.local_sip_port}, protected={self.network.local_protected_port}",
             f"Subscriber IMPI: {self.subscriber.impi}",
@@ -153,7 +153,7 @@ def _network_config(raw: dict[str, Any], cli: dict[str, Any]) -> NetworkConfig:
         raise ConfigError("Invalid config section network: expected mapping")
     local_sip_port, local_protected_port, local_rtp_port = _random_local_ports()
     return NetworkConfig(
-        interface=_required_cli(cli, "interface"),
+        interface=cli.get("interface") or "",
         pcscf_ip=_required_cli(cli, "pcscf_ip"),
         pcscf_port=int(_required_cli(cli, "pcscf_port")),
         local_sip_port=local_sip_port,

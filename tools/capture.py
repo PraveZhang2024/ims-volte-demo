@@ -27,7 +27,7 @@ class TcpdumpCapture:
         command = [
             "tcpdump",
             "-i",
-            self.interface,
+            self.interface or "any",
             "-s",
             "0",
             "-w",
