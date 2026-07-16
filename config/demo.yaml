@@ -1,5 +1,5 @@
 network:
-  interface: simu_d63cc342
+  interface: simu_37d27780
   pcscf_ip: 10.2.30.160
   pcscf_port: 5060
   local_sip_port: 5060
