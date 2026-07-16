@@ -8,12 +8,24 @@ from app.errors import SipError
 
 
 @dataclass(frozen=True)
+class MediaPayloadFormat:
+    payload_type: int
+    codec: str
+    fmtp: dict[str, str | bool] = field(default_factory=dict)
+
+    @property
+    def octet_aligned(self) -> bool:
+        return self.fmtp.get("octet-align", "0") in ("1", "true", True)
+
+
+@dataclass(frozen=True)
 class RemoteMedia:
     ip: str
     port: int
     payload_type: int
     codec: str
     fmtp: dict[str, str | bool] = field(default_factory=dict)
+    payload_formats: dict[int, MediaPayloadFormat] = field(default_factory=dict)
     direction: str = "sendrecv"
 
     @property
@@ -61,9 +73,11 @@ def parse_remote_sdp(body: str) -> RemoteMedia:
     ip = media_ip or session_ip
     if not ip:
         raise SipError("Remote SDP has no connection IP")
+    payload_formats = _payload_formats(audio_payload_types, rtpmap, fmtp_by_pt)
     payload_type = _select_amrwb_payload_type(audio_payload_types, rtpmap)
-    codec = rtpmap.get(payload_type, "AMR-WB")
-    fmtp = fmtp_by_pt.get(payload_type, {})
+    selected_format = payload_formats[payload_type]
+    codec = selected_format.codec
+    fmtp = selected_format.fmtp
     if codec.upper() != "AMR-WB":
         raise SipError(f"Unsupported remote codec: {codec}")
 
@@ -73,6 +87,7 @@ def parse_remote_sdp(body: str) -> RemoteMedia:
         payload_type=payload_type,
         codec=codec,
         fmtp=fmtp,
+        payload_formats=payload_formats,
         direction=direction,
     )
     return media
@@ -100,3 +115,18 @@ def _select_amrwb_payload_type(payload_types: list[int], rtpmap: dict[int, str])
         "Remote SDP audio media does not advertise AMR-WB in rtpmap: "
         + ", ".join(str(payload_type) for payload_type in payload_types)
     )
+
+
+def _payload_formats(
+    payload_types: list[int],
+    rtpmap: dict[int, str],
+    fmtp_by_pt: dict[int, dict[str, str | bool]],
+) -> dict[int, MediaPayloadFormat]:
+    return {
+        payload_type: MediaPayloadFormat(
+            payload_type=payload_type,
+            codec=rtpmap.get(payload_type, ""),
+            fmtp=fmtp_by_pt.get(payload_type, {}),
+        )
+        for payload_type in payload_types
+    }

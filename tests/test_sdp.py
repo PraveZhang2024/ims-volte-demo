@@ -65,3 +65,29 @@ def test_parse_remote_amrwb_sdp_selects_rtpmap_payload_not_first_m_line_payload(
     assert media.payload_type == 98
     assert media.codec == "AMR-WB"
     assert not media.octet_aligned
+    assert media.payload_formats[96].codec == "telephone-event"
+    assert media.payload_formats[98].codec == "AMR-WB"
+
+
+def test_parse_remote_amrwb_sdp_keeps_multiple_amrwb_payload_formats():
+    media = parse_remote_sdp(
+        "\r\n".join(
+            [
+                "v=0",
+                "o=- 1 1 IN IP4 10.0.0.2",
+                "s=-",
+                "c=IN IP4 10.0.0.2",
+                "t=0 0",
+                "m=audio 50000 RTP/AVP 104 110",
+                "a=rtpmap:104 AMR-WB/16000/1",
+                "a=fmtp:104 octet-align=0",
+                "a=rtpmap:110 AMR-WB/16000/1",
+                "a=fmtp:110 octet-align=1",
+                "a=sendrecv",
+                "",
+            ]
+        )
+    )
+    assert media.payload_type == 104
+    assert not media.payload_formats[104].octet_aligned
+    assert media.payload_formats[110].octet_aligned
