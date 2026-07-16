@@ -139,7 +139,22 @@ class RtpReceiver:
 
     def _decode_packet_payload(self, packet: RtpPacket):
         if packet.payload_type == self.payload_type:
-            return rtp_payload_to_frame(packet.payload, octet_aligned=self.octet_aligned)
+            try:
+                return rtp_payload_to_frame(packet.payload, octet_aligned=self.octet_aligned)
+            except MediaError as original_error:
+                alternate_align = not self.octet_aligned
+                try:
+                    frame = rtp_payload_to_frame(packet.payload, octet_aligned=alternate_align)
+                except MediaError:
+                    raise original_error
+                LOGGER.warning(
+                    "Corrected AMR-WB RTP alignment from incoming packet: PT=%s old_octet_align=%s new_octet_align=%s",
+                    packet.payload_type,
+                    self.octet_aligned,
+                    alternate_align,
+                )
+                self.octet_aligned = alternate_align
+                return frame
 
         if 96 <= packet.payload_type <= 127:
             for octet_aligned in (self.octet_aligned, not self.octet_aligned):

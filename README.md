@@ -103,10 +103,18 @@ text from `--content` is encoded as UCS-2 and sent with
 ## Listen Mode
 
 `listen` registers the UE, keeps the protected SIP TCP connection open, and
-waits for an inbound INVITE. When an INVITE arrives, the client sends 180
-Ringing, waits a random 1-5 seconds, sends 200 OK with local AMR-WB SDP, waits
-for ACK, then starts RTP. `send.amr` is looped to the caller and remote RTP is
-saved to `received.amr`.
+waits for inbound SIP traffic. `--content`, `--smsc`, `--target-msisdn`, and
+`--target-uri` are not required in this mode.
+
+When an INVITE arrives, the client sends 180 Ringing, waits a random 1-5
+seconds, sends 200 OK with local AMR-WB SDP, waits for ACK, then starts RTP.
+`send.amr` is looped to the caller and remote RTP is saved to `received.amr`.
+
+When an SMS SIP `MESSAGE` with `Content-Type: application/vnd.3gpp.sms`
+arrives, the client sends SIP 200 OK, parses the RP-DATA/SMS-DELIVER body,
+decodes and prints the SMS content, sends an RP-ACK delivery report in a new
+SIP `MESSAGE`, waits for SIP 200 OK to that delivery report, and then continues
+listening.
 
 Stop with Ctrl+C or SIGTERM. If a call is active, the client attempts to send
 BYE, stops RTP, closes SIP, removes XFRM state/policy, and stops capture.

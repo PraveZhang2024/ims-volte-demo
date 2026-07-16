@@ -119,8 +119,12 @@ def _bandwidth_efficient_payload_to_frame(payload: bytes) -> AmrWbFrame:
     speech_bits = AMRWB_SPEECH_BITS.get(ft)
     if speech_bits is None:
         raise MediaError(f"Unsupported AMR-WB RTP frame type: {ft}")
-    if len(bits) < offset + speech_bits:
-        raise MediaError(f"Truncated AMR-WB bandwidth-efficient payload for FT={ft}")
+    expected_payload_bytes = (offset + speech_bits + 7) // 8
+    if len(payload) != expected_payload_bytes:
+        raise MediaError(
+            f"Invalid AMR-WB bandwidth-efficient payload size for FT={ft}: "
+            f"{len(payload)} != {expected_payload_bytes}"
+        )
     speech = _bits_to_bytes(bits[offset : offset + speech_bits])
     expected_speech = AMRWB_SPEECH_SIZES[ft]
     if len(speech) != expected_speech:

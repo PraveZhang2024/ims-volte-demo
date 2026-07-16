@@ -38,16 +38,23 @@ class SipStreamParser:
 
 
 def parse_sip_message(raw: bytes | str) -> SipMessage:
-    text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
-    header_text, sep, body = text.partition("\r\n\r\n")
-    if not sep:
-        raise SipError("SIP message is missing header/body separator")
+    if isinstance(raw, bytes):
+        header_bytes, sep, body_bytes = raw.partition(HEADER_END)
+        if not sep:
+            raise SipError("SIP message is missing header/body separator")
+        header_text = header_bytes.decode("utf-8", errors="replace")
+        body: str | bytes = body_bytes
+    else:
+        header_text, sep, body_text = raw.partition("\r\n\r\n")
+        if not sep:
+            raise SipError("SIP message is missing header/body separator")
+        body = body_text
 
     lines = header_text.split("\r\n")
     if not lines or not lines[0].strip():
         raise SipError("SIP message has no start line")
 
-    message = SipMessage(start_line=lines[0].strip(), body=body)
+    message = SipMessage(start_line=lines[0].strip())
     current_name: str | None = None
     current_value: list[str] = []
 
@@ -70,6 +77,9 @@ def parse_sip_message(raw: bytes | str) -> SipMessage:
         current_value = [value.strip()]
 
     flush_header()
+    if isinstance(body, bytes) and not _is_binary_sms_body(message):
+        body = body.decode("utf-8", errors="replace")
+    message.body = body
     return message
 
 
@@ -120,3 +130,8 @@ def _content_length(header_text: str) -> int:
         if match:
             return int(match.group(2))
     return 0
+
+
+def _is_binary_sms_body(message: SipMessage) -> bool:
+    content_type = message.get("Content-Type", "") or ""
+    return content_type.split(";", 1)[0].strip().lower() == "application/vnd.3gpp.sms"
