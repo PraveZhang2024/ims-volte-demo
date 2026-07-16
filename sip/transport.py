@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import socket
 
-from app.errors import SipError
+from app.errors import SipError, SipReceiveTimeout
 from sip.message import SipMessage
 from sip.parser import SipStreamParser
 
@@ -80,7 +80,7 @@ class SipTcpTransport:
                         LOGGER.info("SIP RECV\n%s", message.to_bytes().decode("utf-8", errors="replace"))
                     return message
         except TimeoutError as exc:
-            raise SipError(f"SIP receive timed out after {sock.gettimeout()} seconds") from exc
+            raise SipReceiveTimeout(f"SIP receive timed out after {sock.gettimeout()} seconds") from exc
         finally:
             if timeout_seconds is not None:
                 sock.settimeout(original_timeout)

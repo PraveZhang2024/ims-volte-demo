@@ -158,11 +158,17 @@ class SipBuilder:
         msg.add_header("To", dialog_to)
         return msg
 
-    def ok_response(self, request: SipMessage) -> SipMessage:
-        msg = SipMessage("SIP/2.0 200 OK")
+    def ok_response(self, request: SipMessage, *, body: str = "", ids: SipSessionIds | None = None) -> SipMessage:
+        msg = SipMessage("SIP/2.0 200 OK", body=body)
         for header in ("Via", "From", "To", "Call-ID", "CSeq"):
             for value in request.get_all(header):
                 msg.add_header(header, value)
+        if ids is not None:
+            msg.add_header("Contact", self._contact(ids))
+            msg.add_header("Allow", "INVITE, ACK, PRACK, BYE, CANCEL, UPDATE")
+            msg.add_header("Supported", "100rel, timer")
+        if body:
+            msg.add_header("Content-Type", "application/sdp")
         return msg
 
     def _base_headers(
@@ -192,7 +198,10 @@ class SipBuilder:
         features = self.config.ims.contact_features or [
             '+g.3gpp.icsi-ref="urn%3Aurn-7%3A3gpp-service.ims.icsi.mmtel"'
         ]
-        value = f"<sip:{contact_user}@{self.local_ip}:{self.local_sip_port}>"
+        uri = f"sip:{contact_user}@{self.local_ip}:{self.local_sip_port}"
+        if self.config.ims.contact_transport:
+            uri += f";transport={self.config.ims.contact_transport}"
+        value = f"<{uri}>"
         if features:
             value += ";" + ";".join(features)
         if expires is not None:

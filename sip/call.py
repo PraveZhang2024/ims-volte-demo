@@ -8,7 +8,7 @@ import socket
 import time
 
 from app.config import AppConfig
-from app.errors import SipError
+from app.errors import SipError, SipReceiveTimeout
 from media.rtp_receiver import RtpReceiver
 from media.rtp_sender import RtpSender
 from sdp.builder import build_amrwb_offer
@@ -179,6 +179,38 @@ class ImsCallClient:
                 return response
             if response.method == "BYE" and response.status_code is None:
                 self._handle_in_dialog_request(response)
+
+    def poll_during_media(self, ids: SipSessionIds, dialog: SipDialog, *, timeout_seconds: float = 0.5) -> bool:
+        try:
+            message = self.transport.receive(timeout_seconds=timeout_seconds)
+        except SipReceiveTimeout:
+            return True
+
+        if message.status_code is not None:
+            LOGGER.info("Ignoring SIP response during media: %s", message.start_line)
+            return True
+
+        method = message.method
+        LOGGER.info("Received in-dialog request during media: %s", message.start_line)
+        if method == "INVITE":
+            sdp_offer = build_amrwb_offer(self.config, self.local_ip)
+            self.transport.send(self.builder.ok_response(message, body=sdp_offer, ids=ids))
+            LOGGER.info("Answered re-INVITE with 200 OK and local SDP offer")
+            return True
+        if method == "UPDATE":
+            self.transport.send(self.builder.ok_response(message, ids=ids))
+            LOGGER.info("Answered UPDATE with 200 OK")
+            return True
+        if method == "ACK":
+            LOGGER.info("Received ACK for in-dialog transaction")
+            return True
+        if method == "BYE":
+            self.transport.send(self.builder.ok_response(message))
+            LOGGER.info("Remote side ended the call with BYE")
+            return False
+
+        LOGGER.info("Ignoring unsupported in-dialog request: %s", message.start_line)
+        return True
 
     def close(self) -> None:
         self.transport.close()

@@ -101,12 +101,22 @@ class ImsVolteOrchestrator:
 
             sender, receiver = call_client.run_media(call.remote_media)
             self._set_state(ClientState.MEDIA_RUNNING)
-            time.sleep(self.config.call.duration_seconds)
+            media_until = time.monotonic() + self.config.call.duration_seconds
+            keep_running = True
+            while time.monotonic() < media_until:
+                keep_running = call_client.poll_during_media(
+                    registration.ids,
+                    call.dialog,
+                    timeout_seconds=0.5,
+                )
+                if not keep_running:
+                    break
 
             self._set_state(ClientState.TERMINATING)
             if sender:
                 sender.stop()
-            call_client.bye(registration.ids, call.dialog)
+            if keep_running:
+                call_client.bye(registration.ids, call.dialog)
             if receiver:
                 receiver.stop()
             self._set_state(ClientState.TERMINATED)

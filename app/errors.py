@@ -17,6 +17,10 @@ class SipError(ImsClientError):
     """Raised for SIP parsing, building, transport, or flow failures."""
 
 
+class SipReceiveTimeout(SipError):
+    """Raised when no complete SIP message arrives before the receive timeout."""
+
+
 class AkaError(ImsClientError):
     """Raised for IMS AKA and digest failures."""
 

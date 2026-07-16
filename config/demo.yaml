@@ -27,6 +27,7 @@ ims:
   compact_headers: true
   initial_authorization: true
   digest_res_encoding: "raw"
+  contact_transport: "tcp"
   contact_features:
     - '+g.3gpp.accesstype="cellular2"'
     - '+g.3gpp.ps-data-off="inactive"'
