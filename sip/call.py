@@ -147,7 +147,10 @@ class ImsCallClient:
     def wait_for_incoming_call(self, registration_ids: SipSessionIds) -> CallResult:
         LOGGER.info("Waiting for incoming INVITE")
         while True:
-            request = self.transport.receive(timeout_seconds=None)
+            try:
+                request = self.transport.receive(timeout_seconds=1.0)
+            except SipReceiveTimeout:
+                continue
             if request.status_code is not None:
                 LOGGER.info("Ignoring SIP response while listening: %s", request.start_line)
                 continue
