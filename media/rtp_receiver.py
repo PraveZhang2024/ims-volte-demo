@@ -39,6 +39,7 @@ class RtpReceiver:
         self._close_socket_on_stop = close_socket_on_stop
         self.packets_received = 0
         self.frames_written = 0
+        self.frames_discarded = 0
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -90,7 +91,12 @@ class RtpReceiver:
                     data, addr = sock.recvfrom(65535)
                 except socket.timeout:
                     continue
-                packet = RtpPacket.from_bytes(data)
+                try:
+                    packet = RtpPacket.from_bytes(data)
+                except MediaError as exc:
+                    self.frames_discarded += 1
+                    LOGGER.warning("Discarding invalid RTP packet from %s:%s: %s", addr[0], addr[1], exc)
+                    continue
                 self.packets_received += 1
                 if self.packets_received == 1 or self.packets_received % 100 == 0:
                     LOGGER.info(
@@ -103,7 +109,19 @@ class RtpReceiver:
                         packet.timestamp,
                         len(packet.payload),
                     )
-                frame = self._decode_packet_payload(packet)
+                try:
+                    frame = self._decode_packet_payload(packet)
+                except MediaError as exc:
+                    self.frames_discarded += 1
+                    LOGGER.warning(
+                        "Discarding RTP payload PT=%s seq=%s timestamp=%s bytes=%s: %s",
+                        packet.payload_type,
+                        packet.sequence,
+                        packet.timestamp,
+                        len(packet.payload),
+                        exc,
+                    )
+                    continue
                 if frame is None:
                     continue
                 writer.write_frame(frame)
@@ -113,9 +131,10 @@ class RtpReceiver:
             if self._owns_socket or self._close_socket_on_stop:
                 sock.close()
             LOGGER.info(
-                "RTP receiver stopped after %s packets, %s frames",
+                "RTP receiver stopped after %s packets, %s frames, %s discarded",
                 self.packets_received,
                 self.frames_written,
+                self.frames_discarded,
             )
 
     def _decode_packet_payload(self, packet: RtpPacket):
