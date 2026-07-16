@@ -158,6 +158,9 @@ class ImsCallClient:
             if request.status_code is not None:
                 LOGGER.info("Ignoring SIP response while listening: %s", request.start_line)
                 continue
+            if request.method == "ACK":
+                LOGGER.info("Received ACK for a completed/cancelled inbound INVITE while listening")
+                continue
             if request.method != "INVITE":
                 LOGGER.info("Ignoring non-INVITE request while listening: %s", request.start_line)
                 continue
