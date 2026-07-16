@@ -142,21 +142,15 @@ class RtpReceiver:
             return rtp_payload_to_frame(packet.payload, octet_aligned=self.octet_aligned)
 
         if 96 <= packet.payload_type <= 127:
-            for octet_aligned in (self.octet_aligned, not self.octet_aligned):
-                try:
-                    frame = rtp_payload_to_frame(packet.payload, octet_aligned=octet_aligned)
-                except MediaError:
-                    continue
-                LOGGER.warning(
-                    "Learned AMR-WB RTP payload type from incoming packet: old_PT=%s new_PT=%s old_octet_align=%s new_octet_align=%s",
-                    self.payload_type,
-                    packet.payload_type,
-                    self.octet_aligned,
-                    octet_aligned,
-                )
-                self.payload_type = packet.payload_type
-                self.octet_aligned = octet_aligned
-                return frame
+            frame = rtp_payload_to_frame(packet.payload, octet_aligned=self.octet_aligned)
+            LOGGER.warning(
+                "Learned AMR-WB RTP payload type from incoming packet: old_PT=%s new_PT=%s octet_align=%s",
+                self.payload_type,
+                packet.payload_type,
+                self.octet_aligned,
+            )
+            self.payload_type = packet.payload_type
+            return frame
 
         LOGGER.debug("Ignoring RTP payload type %s, expected %s", packet.payload_type, self.payload_type)
         return None

@@ -83,11 +83,13 @@ class ImsCallClient:
                 if response.body:
                     remote_media = parse_remote_sdp(response.body)
                     LOGGER.info(
-                        "Parsed early media SDP: remote=%s:%s PT=%s direction=%s",
+                        "Parsed early media SDP: remote=%s:%s PT=%s direction=%s octet_align=%s fmtp=%s",
                         remote_media.ip,
                         remote_media.port,
                         remote_media.payload_type,
                         remote_media.direction,
+                        remote_media.octet_aligned,
+                        remote_media.fmtp,
                     )
                 rack = rack_from_response(response)
                 if rack:
@@ -116,11 +118,13 @@ class ImsCallClient:
                     if response.body:
                         remote_media = parse_remote_sdp(response.body)
                         LOGGER.info(
-                            "Parsed final media SDP: remote=%s:%s PT=%s direction=%s",
+                            "Parsed final media SDP: remote=%s:%s PT=%s direction=%s octet_align=%s fmtp=%s",
                             remote_media.ip,
                             remote_media.port,
                             remote_media.payload_type,
                             remote_media.direction,
+                            remote_media.octet_aligned,
+                            remote_media.fmtp,
                         )
                     self.transport.send(
                         self.builder.ack(
