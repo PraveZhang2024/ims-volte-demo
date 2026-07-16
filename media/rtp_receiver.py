@@ -12,7 +12,7 @@ from app.errors import MediaError
 from media.amrwb_file import AmrWbFileWriter
 from media.amrwb_payload import rtp_payload_to_frame
 from media.rtp_packet import RtpPacket
-from sdp.parser import MediaPayloadFormat, RemoteMedia
+from sdp.parser import RemoteMedia
 
 LOGGER = logging.getLogger(__name__)
 
@@ -24,7 +24,6 @@ class RtpReceiver:
         local_ip: str,
         local_port: int,
         payload_type: int,
-        payload_formats: dict[int, MediaPayloadFormat],
         output_path: Path,
         octet_aligned: bool,
         sock: socket.socket | None = None,
@@ -33,7 +32,6 @@ class RtpReceiver:
         self.local_ip = local_ip
         self.local_port = local_port
         self.payload_type = payload_type
-        self.payload_formats = payload_formats
         self.output_path = output_path
         self.octet_aligned = octet_aligned
         self._sock = sock
@@ -58,7 +56,6 @@ class RtpReceiver:
             local_ip=local_ip,
             local_port=config.network.local_rtp_port,
             payload_type=remote_media.payload_type,
-            payload_formats=remote_media.payload_formats,
             output_path=config.base_dir / config.media.receive_file,
             octet_aligned=remote_media.octet_aligned,
             sock=sock,
@@ -141,27 +138,19 @@ class RtpReceiver:
             )
 
     def _decode_packet_payload(self, packet: RtpPacket):
-        payload_format = self.payload_formats.get(packet.payload_type)
-        if payload_format is None:
-            LOGGER.debug(
-                "Ignoring RTP payload type %s; SDP payload map has %s",
-                packet.payload_type,
-                sorted(self.payload_formats),
-            )
-            return None
+        if packet.payload_type == self.payload_type:
+            return rtp_payload_to_frame(packet.payload, octet_aligned=self.octet_aligned)
 
-        if payload_format.codec.upper() != "AMR-WB":
-            LOGGER.debug(
-                "Ignoring non-AMR-WB RTP payload type %s codec=%s",
-                packet.payload_type,
-                payload_format.codec,
-            )
-            return None
-
-        if packet.payload_type != self.payload_type:
-            LOGGER.info(
-                "Receiving AMR-WB RTP payload type %s from SDP map; primary AMR-WB PT is %s",
-                packet.payload_type,
+        if 96 <= packet.payload_type <= 127:
+            frame = rtp_payload_to_frame(packet.payload, octet_aligned=self.octet_aligned)
+            LOGGER.warning(
+                "Learned AMR-WB RTP payload type from incoming packet: old_PT=%s new_PT=%s octet_align=%s",
                 self.payload_type,
+                packet.payload_type,
+                self.octet_aligned,
             )
-        return rtp_payload_to_frame(packet.payload, octet_aligned=payload_format.octet_aligned)
+            self.payload_type = packet.payload_type
+            return frame
+
+        LOGGER.debug("Ignoring RTP payload type %s, expected %s", packet.payload_type, self.payload_type)
+        return None
