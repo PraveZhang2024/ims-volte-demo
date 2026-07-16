@@ -187,6 +187,7 @@ class ImsCallClient:
                 self.config,
                 self.local_ip,
                 octet_align=remote_media.octet_aligned,
+                payload_type=remote_media.payload_type,
             )
             self.transport.send(
                 self.builder.ok_response(

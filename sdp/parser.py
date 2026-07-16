@@ -25,9 +25,9 @@ def parse_remote_sdp(body: str) -> RemoteMedia:
     session_ip: str | None = None
     media_ip: str | None = None
     audio_port: int | None = None
-    payload_type: int | None = None
-    codec = ""
-    fmtp: dict[str, str | bool] = {}
+    audio_payload_types: list[int] = []
+    rtpmap: dict[int, str] = {}
+    fmtp_by_pt: dict[int, dict[str, str | bool]] = {}
     direction = "sendrecv"
 
     for raw_line in body.replace("\r\n", "\n").split("\n"):
@@ -45,23 +45,25 @@ def parse_remote_sdp(body: str) -> RemoteMedia:
             if len(parts) < 4:
                 raise SipError(f"Invalid audio media line: {line}")
             audio_port = int(parts[1])
-            payload_type = int(parts[3])
+            audio_payload_types = [int(part) for part in parts[3:]]
         elif line.startswith("a=rtpmap:"):
             left, right = line[9:].split(None, 1)
-            if payload_type is None or int(left) == payload_type:
-                codec = right.split("/", 1)[0]
+            payload_type = int(left)
+            rtpmap[payload_type] = right.split("/", 1)[0]
         elif line.startswith("a=fmtp:"):
             left, right = line[7:].split(None, 1)
-            if payload_type is None or int(left) == payload_type:
-                fmtp.update(_parse_fmtp(right))
+            fmtp_by_pt[int(left)] = _parse_fmtp(right)
         elif line in ("a=sendrecv", "a=sendonly", "a=recvonly", "a=inactive"):
             direction = line[2:]
 
-    if audio_port is None or payload_type is None:
+    if audio_port is None or not audio_payload_types:
         raise SipError("Remote SDP has no audio media")
     ip = media_ip or session_ip
     if not ip:
         raise SipError("Remote SDP has no connection IP")
+    payload_type = _select_amrwb_payload_type(audio_payload_types, rtpmap)
+    codec = rtpmap.get(payload_type, "AMR-WB")
+    fmtp = fmtp_by_pt.get(payload_type, {})
     if codec.upper() != "AMR-WB":
         raise SipError(f"Unsupported remote codec: {codec}")
 
@@ -88,3 +90,13 @@ def _parse_fmtp(value: str) -> dict[str, str | bool]:
         else:
             params[part] = True
     return params
+
+
+def _select_amrwb_payload_type(payload_types: list[int], rtpmap: dict[int, str]) -> int:
+    for payload_type in payload_types:
+        if rtpmap.get(payload_type, "").upper() == "AMR-WB":
+            return payload_type
+    raise SipError(
+        "Remote SDP audio media does not advertise AMR-WB in rtpmap: "
+        + ", ".join(str(payload_type) for payload_type in payload_types)
+    )

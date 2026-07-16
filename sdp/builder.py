@@ -7,9 +7,15 @@ import time
 from app.config import AppConfig
 
 
-def build_amrwb_offer(config: AppConfig, local_ip: str, *, octet_align: bool | None = None) -> str:
+def build_amrwb_offer(
+    config: AppConfig,
+    local_ip: str,
+    *,
+    octet_align: bool | None = None,
+    payload_type: int | None = None,
+) -> str:
     session_id = int(time.time())
-    pt = config.media.payload_type
+    pt = config.media.payload_type if payload_type is None else payload_type
     effective_octet_align = config.media.octet_align if octet_align is None else octet_align
     return "\r\n".join(
         [
