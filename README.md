@@ -37,6 +37,20 @@ python3 main.py --config config/demo.yaml --mode register
 python3 main.py --config config/demo.yaml --mode call
 ```
 
+Set the call duration from the command line. By default, call mode runs for
+30 seconds if `--duration-seconds` is omitted.
+
+```bash
+python3 main.py --config config/demo.yaml --mode call --duration-seconds 60
+```
+
+Use a non-positive value to keep looping `media_files/send.amr` until the
+remote side sends BYE or the process receives Ctrl+C/SIGTERM:
+
+```bash
+python3 main.py --config config/demo.yaml --mode call --duration-seconds 0
+```
+
 `debug.execute_xfrm_commands` is `false` by default. Keep it disabled until
 the generated commands have been checked against your capture and lab setup.
 

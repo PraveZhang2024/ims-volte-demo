@@ -79,7 +79,7 @@ def test_register_authorization_uri_matches_register_request_uri_when_challenge_
             k="00" * 16,
             opc="11" * 16,
         ),
-        call=CallConfig(target_uri="sip:+101@ims.mnc009.mcc404.3gppnetwork.org", duration_seconds=1, local_display_name="UE"),
+        call=CallConfig(target_uri="sip:+101@ims.mnc009.mcc404.3gppnetwork.org", local_display_name="UE"),
         ims=ImsConfig(),
         media=MediaConfig(
             codec="AMR-WB",

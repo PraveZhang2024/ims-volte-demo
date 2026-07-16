@@ -11,6 +11,8 @@ from app.config import load_config
 from app.errors import ImsClientError
 from app.orchestrator import ImsVolteOrchestrator
 
+DEFAULT_CALL_DURATION_SECONDS = 30.0
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Python IMS VoLTE demo client")
@@ -22,6 +24,12 @@ def parse_args() -> argparse.Namespace:
         help="Validation stage to run",
     )
     parser.add_argument("--log-level", default="INFO", help="Python logging level")
+    parser.add_argument(
+        "--duration-seconds",
+        type=float,
+        default=None,
+        help="Call duration in seconds. Defaults to 30. Use <= 0 to loop media until BYE or signal.",
+    )
     return parser.parse_args()
 
 
@@ -59,7 +67,14 @@ def main() -> int:
         elif args.mode == "register":
             orchestrator.register()
         elif args.mode == "call":
-            orchestrator.run_call()
+            duration_seconds = args.duration_seconds
+            if duration_seconds is None:
+                duration_seconds = DEFAULT_CALL_DURATION_SECONDS
+                logging.getLogger(__name__).info(
+                    "--duration-seconds not provided; using default %.0f seconds",
+                    duration_seconds,
+                )
+            orchestrator.run_call(duration_seconds=duration_seconds)
         else:
             raise ImsClientError(f"Unsupported mode: {args.mode}")
     except ImsClientError as exc:

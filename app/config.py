@@ -35,7 +35,6 @@ class SubscriberConfig:
 @dataclass(frozen=True)
 class CallConfig:
     target_uri: str
-    duration_seconds: int
     local_display_name: str
     user_agent: str = "python-ims-volte-demo/0.1"
     setup_timeout_seconds: float = 120.0

@@ -81,7 +81,7 @@ class ImsVolteOrchestrator:
             if cleanup_on_exit:
                 self.xfrm_manager.cleanup_all()
 
-    def run_call(self) -> None:
+    def run_call(self, *, duration_seconds: float) -> None:
         capture = self._capture()
         capture.start()
         sender = None
@@ -104,8 +104,15 @@ class ImsVolteOrchestrator:
 
             sender, receiver = call_client.run_media(call.remote_media)
             self._set_state(ClientState.MEDIA_RUNNING)
-            media_until = time.monotonic() + self.config.call.duration_seconds
-            while time.monotonic() < media_until:
+            effective_duration = duration_seconds
+            if effective_duration <= 0:
+                LOGGER.info("Call duration is unlimited; media loops until remote BYE or signal")
+                media_until = None
+            else:
+                LOGGER.info("Call duration: %s seconds", effective_duration)
+                media_until = time.monotonic() + effective_duration
+
+            while media_until is None or time.monotonic() < media_until:
                 keep_running = call_client.poll_during_media(
                     registration.ids,
                     call.dialog,

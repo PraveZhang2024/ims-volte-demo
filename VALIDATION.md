@@ -106,8 +106,11 @@ ffmpeg -y -i input.wav -ar 16000 -ac 1 -c:a libvo_amrwbenc media_files/send.amr
 Then run:
 
 ```bash
-sudo python3 main.py --config config/demo.yaml --mode call --log-level DEBUG
+sudo python3 main.py --config config/demo.yaml --mode call --duration-seconds 30 --log-level DEBUG
 ```
+
+Use `--duration-seconds 0` to loop `media_files/send.amr` until remote BYE,
+Ctrl+C, or SIGTERM.
 
 Expected:
 
@@ -117,7 +120,7 @@ Expected:
 - 200 INVITE triggers ACK.
 - RTP AMR-WB is sent every 20 ms.
 - Remote RTP is saved to `media_files/received.amr`.
-- BYE is sent after `call.duration_seconds`.
+- BYE is sent after `--duration-seconds`. If the option is omitted, the default is 30 seconds. If the effective duration is `<= 0`, media runs until remote BYE or signal.
 
 Convert received audio:
 
