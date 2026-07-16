@@ -183,7 +183,11 @@ class ImsCallClient:
             LOGGER.info("Incoming call received; answering after %.1f seconds", delay)
             time.sleep(delay)
 
-            sdp_answer = build_amrwb_offer(self.config, self.local_ip)
+            sdp_answer = build_amrwb_offer(
+                self.config,
+                self.local_ip,
+                octet_align=remote_media.octet_aligned,
+            )
             self.transport.send(
                 self.builder.ok_response(
                     request,
@@ -237,6 +241,7 @@ class ImsCallClient:
         receiver = RtpReceiver.from_config(
             self.config,
             self.local_ip,
+            remote_media,
             sock=rtp_sock,
             close_socket_on_stop=True,
         )

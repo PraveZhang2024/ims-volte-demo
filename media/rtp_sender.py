@@ -30,6 +30,7 @@ class RtpSender:
         ptime_ms: int,
         timestamp_step: int,
         amr_path: Path,
+        octet_aligned: bool,
         sock: socket.socket | None = None,
     ) -> None:
         self.local_ip = local_ip
@@ -40,6 +41,7 @@ class RtpSender:
         self.ptime_ms = ptime_ms
         self.timestamp_step = timestamp_step
         self.amr_path = amr_path
+        self.octet_aligned = octet_aligned
         self._sock = sock
         self._owns_socket = sock is None
         self.sequence = secrets.randbelow(0xFFFF)
@@ -66,6 +68,7 @@ class RtpSender:
             ptime_ms=config.media.ptime_ms,
             timestamp_step=int(config.media.clock_rate * config.media.ptime_ms / 1000),
             amr_path=config.base_dir / config.media.send_file,
+            octet_aligned=remote_media.octet_aligned,
             sock=sock,
         )
 
@@ -85,7 +88,7 @@ class RtpSender:
             if self._owns_socket:
                 sock.bind((self.local_ip, self.local_port))
             LOGGER.info(
-                "RTP sender started: local_socket=%s:%s configured_local=%s:%s remote=%s:%s PT=%s SSRC=%s file=%s",
+                "RTP sender started: local_socket=%s:%s configured_local=%s:%s remote=%s:%s PT=%s octet_align=%s SSRC=%s file=%s",
                 sock.getsockname()[0],
                 sock.getsockname()[1],
                 self.local_ip,
@@ -93,6 +96,7 @@ class RtpSender:
                 self.remote_ip,
                 self.remote_port,
                 self.payload_type,
+                self.octet_aligned,
                 self.ssrc,
                 self.amr_path,
             )
@@ -102,7 +106,7 @@ class RtpSender:
                 frame = reader.read_frame()
                 if frame is None:
                     break
-                payload = frame_to_rtp_payload(frame)
+                payload = frame_to_rtp_payload(frame, octet_aligned=self.octet_aligned)
                 packet = RtpPacket(
                     payload_type=self.payload_type,
                     sequence=self.sequence,

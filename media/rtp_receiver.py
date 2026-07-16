@@ -11,6 +11,7 @@ from app.config import AppConfig
 from media.amrwb_file import AmrWbFileWriter
 from media.amrwb_payload import rtp_payload_to_frame
 from media.rtp_packet import RtpPacket
+from sdp.parser import RemoteMedia
 
 LOGGER = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class RtpReceiver:
         local_port: int,
         payload_type: int,
         output_path: Path,
+        octet_aligned: bool,
         sock: socket.socket | None = None,
         close_socket_on_stop: bool = False,
     ) -> None:
@@ -30,6 +32,7 @@ class RtpReceiver:
         self.local_port = local_port
         self.payload_type = payload_type
         self.output_path = output_path
+        self.octet_aligned = octet_aligned
         self._sock = sock
         self._owns_socket = sock is None
         self._close_socket_on_stop = close_socket_on_stop
@@ -43,14 +46,16 @@ class RtpReceiver:
         cls,
         config: AppConfig,
         local_ip: str,
+        remote_media: RemoteMedia,
         sock: socket.socket | None = None,
         close_socket_on_stop: bool = False,
     ) -> "RtpReceiver":
         return cls(
             local_ip=local_ip,
             local_port=config.network.local_rtp_port,
-            payload_type=config.media.payload_type,
+            payload_type=remote_media.payload_type,
             output_path=config.base_dir / config.media.receive_file,
+            octet_aligned=remote_media.octet_aligned,
             sock=sock,
             close_socket_on_stop=close_socket_on_stop,
         )
@@ -72,10 +77,11 @@ class RtpReceiver:
                 sock.bind((self.local_ip, self.local_port))
             sock.settimeout(0.5)
             LOGGER.info(
-                "RTP receiver started: %s:%s PT=%s output=%s",
+                "RTP receiver started: %s:%s PT=%s octet_align=%s output=%s",
                 self.local_ip,
                 self.local_port,
                 self.payload_type,
+                self.octet_aligned,
                 self.output_path,
             )
             while not self._stop.is_set():
@@ -99,7 +105,7 @@ class RtpReceiver:
                 if packet.payload_type != self.payload_type:
                     LOGGER.debug("Ignoring RTP payload type %s", packet.payload_type)
                     continue
-                frame = rtp_payload_to_frame(packet.payload)
+                frame = rtp_payload_to_frame(packet.payload, octet_aligned=self.octet_aligned)
                 writer.write_frame(frame)
                 self.frames_written += 1
         finally:

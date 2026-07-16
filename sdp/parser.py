@@ -18,7 +18,7 @@ class RemoteMedia:
 
     @property
     def octet_aligned(self) -> bool:
-        return self.fmtp.get("octet-align") in ("1", "true", True)
+        return self.fmtp.get("octet-align", "0") in ("1", "true", True)
 
 
 def parse_remote_sdp(body: str) -> RemoteMedia:
@@ -73,8 +73,6 @@ def parse_remote_sdp(body: str) -> RemoteMedia:
         fmtp=fmtp,
         direction=direction,
     )
-    if not media.octet_aligned:
-        raise SipError("Remote AMR-WB SDP must use octet-align=1")
     return media
 
 
