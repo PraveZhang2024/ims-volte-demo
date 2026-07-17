@@ -31,29 +31,20 @@ def find_data(msisdn_or_imsi: str) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Python IMS VoLTE demo client")
-    parser.add_argument("--f", required=True, help="Self MSISDN/IMSI")
-    parser.add_argument("--t", required=True, help="Target MSISDN/IMSI")
-    args = parser.parse_args()
-    f_data = find_data(args.f)
-    t_data = find_data(args.t)
-    if not f_data:
-        print('未找到 {} 的信息'.format(args.f))
+    msisdn_or_imsi = sys.argv[1]
+    data = find_data(msisdn_or_imsi)
+    if not data:
+        print('未找到 {} 的信息'.format(msisdn_or_imsi))
         return -1
-    print('from = {}'.format(f_data))
-    if not t_data:
-        print('未找到 {} 的信息'.format(args.t))
-        return -1
-    print('to = {}'.format(t_data))
-    os.system('bash -lc \'source /root/venv/bin/activate && cd /root/ims-volte-demo && python3 main.py --config config/demo.yaml --mode call  --log-level DEBUG --pcscf-ip  {}  --pcscf-port 5060 --imsi {} --impi {} --impu "{}"  --realm {} --k {} --opc {} --target-uri "{}" \''.format(
-        f_data['ims_ip'],
-        f_data['imsi'],
-        '{}@{}'.format(f_data['imsi'], f_data['realm']),
-        'sip:+{}@{}'.format(f_data['msisdn'], f_data['realm']),
-        f_data['realm'],
-        f_data['k'],
-        f_data['opc'],
-        'sip:+{}@{}'.format(t_data['msisdn'], t_data['realm']),
+    print('listen = {}'.format(data))
+    os.system('bash -lc \'source /root/venv/bin/activate && cd /root/ims-volte-demo && python3 main.py --config config/demo.yaml --mode listen  --log-level DEBUG --pcscf-ip  {}  --pcscf-port 5060 --imsi {} --impi {} --impu "{}"  --realm {} --k {} --opc {} \''.format(
+        data['ims_ip'],
+        data['imsi'],
+        '{}@{}'.format(data['imsi'], data['realm']),
+        'sip:+{}@{}'.format(data['msisdn'], data['realm']),
+        data['realm'],
+        data['k'],
+        data['opc'],
     ))
     return 0
 
