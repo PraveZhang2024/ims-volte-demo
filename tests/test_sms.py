@@ -1,7 +1,12 @@
 import pytest
 
 from app.errors import SipError
-from sip.sms import build_sms_submit_rpdata, tel_uri
+from sip.sms import (
+    build_sms_delivery_report_rpack,
+    build_sms_submit_rpdata,
+    parse_mt_sms_rpdata,
+    tel_uri,
+)
 
 
 def test_build_sms_submit_rpdata_encodes_smsc_target_and_ucs2(monkeypatch):
@@ -23,3 +28,16 @@ def test_build_sms_submit_rpdata_encodes_smsc_target_and_ucs2(monkeypatch):
 def test_sms_rejects_non_digit_numbers():
     with pytest.raises(SipError):
         tel_uri("+8613900139000")
+
+
+def test_parse_mt_sms_rpdata_extracts_tpdu_and_reference():
+    body = bytes.fromhex("01 7a 02 91 21 00 03 00 aa bb")
+    parsed = parse_mt_sms_rpdata(body)
+    assert parsed.message_reference == 0x7A
+    assert parsed.originator_address == bytes.fromhex("91 21")
+    assert parsed.destination_address == b""
+    assert parsed.tpdu == bytes.fromhex("00 aa bb")
+
+
+def test_build_sms_delivery_report_rpack_contains_deliver_report_tpdu():
+    assert build_sms_delivery_report_rpack(0x7A) == bytes.fromhex("02 7a 41 02 00 00")

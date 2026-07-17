@@ -203,6 +203,11 @@ class ImsVolteOrchestrator:
             local_ip = registration.ids.local_ip
             call_client = ImsCallClient(self.config, local_ip, transport=registration.protected_transport)
             sms_client = ImsSmsClient(self.config, local_ip, transport=registration.protected_transport)
+            inbound_request_handler = lambda request: sms_client.handle_inbound_message(
+                registration.ids,
+                request,
+                service_routes=registration.service_routes,
+            )
             while True:
                 sender = None
                 receiver = None
@@ -212,11 +217,7 @@ class ImsVolteOrchestrator:
                     LOGGER.info("Waiting for the next inbound call or SMS")
                     call = call_client.wait_for_incoming_call(
                         registration.ids,
-                        request_handler=lambda request: sms_client.handle_inbound_message(
-                            registration.ids,
-                            request,
-                            service_routes=registration.service_routes,
-                        ),
+                        request_handler=inbound_request_handler,
                     )
                     self._set_state(ClientState.CALL_ESTABLISHED)
 
@@ -228,6 +229,7 @@ class ImsVolteOrchestrator:
                             call.dialog,
                             sender=sender,
                             receiver=receiver,
+                            request_handler=inbound_request_handler,
                             timeout_seconds=0.5,
                         )
                         if not keep_running:

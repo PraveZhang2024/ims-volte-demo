@@ -198,7 +198,7 @@ class ImsCallClient:
             delay = random.uniform(1, 6)
             LOGGER.info("Incoming call received; answering after %.1f seconds", delay)
             try:
-                self._wait_before_answer(delay, request, local_tag)
+                self._wait_before_answer(delay, request, local_tag, request_handler=request_handler)
             except IncomingCallCancelled:
                 LOGGER.info("Incoming call was cancelled before answer; returning to listen state")
                 continue
@@ -220,7 +220,7 @@ class ImsCallClient:
             LOGGER.info("Sent 200 OK for incoming INVITE; waiting for ACK")
 
             try:
-                self._wait_for_ack(dialog, request, local_tag)
+                self._wait_for_ack(dialog, request, local_tag, request_handler=request_handler)
             except IncomingCallCancelled:
                 LOGGER.info("Incoming call was cancelled while waiting for ACK; returning to listen state")
                 continue
@@ -233,7 +233,14 @@ class ImsCallClient:
                 final_response=None,
             )
 
-    def _wait_before_answer(self, delay_seconds: float, invite: SipMessage, local_tag: str) -> None:
+    def _wait_before_answer(
+        self,
+        delay_seconds: float,
+        invite: SipMessage,
+        local_tag: str,
+        *,
+        request_handler: Callable[[SipMessage], bool] | None = None,
+    ) -> None:
         deadline = time.monotonic() + delay_seconds
         while True:
             remaining = deadline - time.monotonic()
@@ -249,9 +256,18 @@ class ImsCallClient:
             if message.method == "CANCEL":
                 self._answer_cancel(message, invite, local_tag)
                 raise IncomingCallCancelled()
+            if request_handler and request_handler(message):
+                continue
             LOGGER.info("Ignoring request before answering inbound call: %s", message.start_line)
 
-    def _wait_for_ack(self, dialog: SipDialog, invite: SipMessage, local_tag: str) -> None:
+    def _wait_for_ack(
+        self,
+        dialog: SipDialog,
+        invite: SipMessage,
+        local_tag: str,
+        *,
+        request_handler: Callable[[SipMessage], bool] | None = None,
+    ) -> None:
         deadline = time.monotonic() + self.config.call.setup_timeout_seconds
         while True:
             remaining = deadline - time.monotonic()
@@ -269,6 +285,8 @@ class ImsCallClient:
             if message.method == "BYE":
                 self.transport.send(self.builder.ok_response(message))
                 raise SipError("Remote sent BYE before ACK")
+            if request_handler and request_handler(message):
+                continue
             LOGGER.info("Ignoring request while waiting for ACK: %s", message.start_line)
 
     def _answer_cancel(self, cancel: SipMessage, invite: SipMessage, local_tag: str) -> None:
@@ -354,6 +372,7 @@ class ImsCallClient:
         *,
         sender: RtpSender,
         receiver: RtpReceiver,
+        request_handler: Callable[[SipMessage], bool] | None = None,
         timeout_seconds: float = 0.5,
     ) -> bool:
         try:
@@ -367,6 +386,8 @@ class ImsCallClient:
 
         method = message.method
         LOGGER.info("Received in-dialog request during media: %s", message.start_line)
+        if request_handler and request_handler(message):
+            return True
         if method == "INVITE":
             if message.body:
                 remote_media = parse_remote_sdp(message.body)
