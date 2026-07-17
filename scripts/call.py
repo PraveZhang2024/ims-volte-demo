@@ -45,7 +45,7 @@ def main():
         print('未找到 {} 的信息'.format(args.t))
         return -1
     print('to = {}'.format(t_data))
-    os.system('source /root/venv/bin/activate && cd /root/ims-volte-demo && python3 main.py --config config/demo.yaml --mode call  --log-level DEBUG --pcscf-ip  {}  --pcscf-port 5060 --imsi {} --impi {} --impu "{}"  --realm {} --k {} --opc {} --target-uri {} '.format(
+    os.system('bash -lc \'source /root/venv/bin/activate && cd /root/ims-volte-demo && python3 main.py --config config/demo.yaml --mode call  --log-level DEBUG --pcscf-ip  {}  --pcscf-port 5060 --imsi {} --impi {} --impu "{}"  --realm {} --k {} --opc {} --target-uri {} \''.format(
         f_data['ims_ip'],
         f_data['imsi'],
         '{}@{}'.format(f_data['imsi'], f_data['realm']),
