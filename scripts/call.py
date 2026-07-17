@@ -32,16 +32,16 @@ def find_data(msisdn_or_imsi: str) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description="Python IMS VoLTE demo client")
-    parser.add_argument("--from", required=True, help="Self MSISDN/IMSI")
-    parser.add_argument("--to", required=True, help="Target MSISDN/IMSI")
+    parser.add_argument("--f", required=True, help="Self MSISDN/IMSI")
+    parser.add_argument("--t", required=True, help="Target MSISDN/IMSI")
     args = parser.parse_args()
-    f_data = find_data(args['from'])
-    t_data = find_data(args['to'])
+    f_data = find_data(args.f)
+    t_data = find_data(args.t)
     if not f_data:
-        print('未找到 {} 的信息'.format(args['from']))
+        print('未找到 {} 的信息'.format(args.f))
         return -1
     if not t_data:
-        print('未找到 {} 的信息'.format(args['to']))
+        print('未找到 {} 的信息'.format(args.t))
         return -1
     os.system('source /root/venv/bin/activate && cd /root/ims-volte-demo && python3 main.py --config config/demo.yaml --mode call  --log-level DEBUG --pcscf-ip  {}  --pcscf-port 5060 --imsi {} --impi {} --impu "{}"  --realm {} --k {} --opc {} --target-uri {} '.format(
         f_data['ims_ip'],
