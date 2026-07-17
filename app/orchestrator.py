@@ -190,13 +190,9 @@ class ImsVolteOrchestrator:
     def run_listen(self) -> None:
         capture = self._capture()
         capture.start()
-        sender = None
-        receiver = None
         call_client = None
         sms_client = None
         registration = None
-        call = None
-        remote_ended = False
         try:
             registration = self.register(cleanup_on_exit=False, manage_capture=False)
             if not registration.registered:
@@ -207,55 +203,66 @@ class ImsVolteOrchestrator:
             local_ip = registration.ids.local_ip
             call_client = ImsCallClient(self.config, local_ip, transport=registration.protected_transport)
             sms_client = ImsSmsClient(self.config, local_ip, transport=registration.protected_transport)
-            call = call_client.wait_for_incoming_call(
-                registration.ids,
-                request_handler=lambda request: sms_client.handle_inbound_message(
-                    registration.ids,
-                    request,
-                    service_routes=registration.service_routes,
-                ),
-            )
-            self._set_state(ClientState.CALL_ESTABLISHED)
-
-            sender, receiver = call_client.run_media(call.remote_media)
-            self._set_state(ClientState.MEDIA_RUNNING)
             while True:
-                keep_running = call_client.poll_during_media(
-                    call.ids,
-                    call.dialog,
-                    sender=sender,
-                    receiver=receiver,
-                    timeout_seconds=0.5,
-                )
-                if not keep_running:
-                    remote_ended = True
-                    break
-        finally:
-            if call is not None:
-                self._set_state(ClientState.TERMINATING)
-            if sender:
-                sender.stop()
-            if call_client and registration and call and not remote_ended:
+                sender = None
+                receiver = None
+                call = None
+                remote_ended = False
                 try:
-                    call_client.bye(
-                        call.ids,
-                        call.dialog,
-                        timeout_seconds=self.config.network.connect_timeout_seconds,
+                    LOGGER.info("Waiting for the next inbound call or SMS")
+                    call = call_client.wait_for_incoming_call(
+                        registration.ids,
+                        request_handler=lambda request: sms_client.handle_inbound_message(
+                            registration.ids,
+                            request,
+                            service_routes=registration.service_routes,
+                        ),
                     )
-                except Exception as exc:
-                    LOGGER.warning("Failed to send BYE during listen shutdown: %s", exc)
+                    self._set_state(ClientState.CALL_ESTABLISHED)
+
+                    sender, receiver = call_client.run_media(call.remote_media)
+                    self._set_state(ClientState.MEDIA_RUNNING)
+                    while True:
+                        keep_running = call_client.poll_during_media(
+                            call.ids,
+                            call.dialog,
+                            sender=sender,
+                            receiver=receiver,
+                            timeout_seconds=0.5,
+                        )
+                        if not keep_running:
+                            remote_ended = True
+                            break
+                finally:
+                    if call is not None:
+                        self._set_state(ClientState.TERMINATING)
+                    if sender:
+                        sender.stop()
+                    if call is not None and not remote_ended:
+                        try:
+                            call_client.bye(
+                                call.ids,
+                                call.dialog,
+                                timeout_seconds=self.config.network.connect_timeout_seconds,
+                            )
+                        except Exception as exc:
+                            LOGGER.warning("Failed to send BYE during listen shutdown: %s", exc)
+                    if receiver:
+                        receiver.stop()
+                    if call is not None:
+                        self._set_state(ClientState.REGISTERED)
+                        if remote_ended:
+                            LOGGER.info("Inbound call ended by remote; returning to listen mode")
+        finally:
             if call_client:
                 call_client.drain_pending_sip(max_seconds=1.0)
-            if receiver:
-                receiver.stop()
             if call_client:
                 call_client.close()
             elif sms_client:
                 sms_client.close()
             self.xfrm_manager.cleanup_all()
             capture.stop()
-            if call is not None:
-                self._set_state(ClientState.TERMINATED)
+            self._set_state(ClientState.TERMINATED)
 
     def _capture(self) -> TcpdumpCapture:
         return TcpdumpCapture(

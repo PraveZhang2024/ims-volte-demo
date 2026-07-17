@@ -195,7 +195,7 @@ class ImsCallClient:
                     to_tag=local_tag,
                 )
             )
-            delay = random.uniform(3, 10)
+            delay = random.uniform(1, 6)
             LOGGER.info("Incoming call received; answering after %.1f seconds", delay)
             try:
                 self._wait_before_answer(delay, request, local_tag)

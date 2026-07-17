@@ -149,4 +149,5 @@ Expected:
 - On inbound INVITE, the client sends 180 Ringing.
 - After a random 1-5 second delay, the client sends 200 OK with local AMR-WB SDP.
 - After ACK, RTP starts: `send.amr` is looped and remote audio is saved to `media_files/received.amr`.
-- Ctrl+C/SIGTERM or remote BYE stops RTP, drains SIP briefly, closes sockets, cleans XFRM, and stops pcap capture.
+- Remote BYE stops RTP for the current call and returns to waiting for the next INVITE without re-registering.
+- Ctrl+C/SIGTERM ends an active call with BYE when possible, then closes sockets, cleans XFRM, and stops pcap capture.

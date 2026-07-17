@@ -109,6 +109,8 @@ waits for inbound SIP traffic. `--content`, `--smsc`, `--target-msisdn`, and
 When an INVITE arrives, the client sends 180 Ringing, waits a random 1-5
 seconds, sends 200 OK with local AMR-WB SDP, waits for ACK, then starts RTP.
 `send.amr` is looped to the caller and remote RTP is saved to `received.amr`.
+When the remote side sends BYE, the client answers 200 OK, stops media for that
+call, keeps the protected SIP registration alive, and waits for the next call.
 
 When an SMS SIP `MESSAGE` with `Content-Type: application/vnd.3gpp.sms`
 arrives, the client sends SIP 200 OK, parses the RP-DATA/SMS-DELIVER body,
