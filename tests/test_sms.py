@@ -39,5 +39,5 @@ def test_parse_mt_sms_rpdata_extracts_tpdu_and_reference():
     assert parsed.tpdu == bytes.fromhex("00 aa bb")
 
 
-def test_build_sms_delivery_report_rpack_contains_deliver_report_tpdu():
-    assert build_sms_delivery_report_rpack(0x7A) == bytes.fromhex("02 7a 41 02 00 00")
+def test_build_sms_delivery_report_rpack_is_two_byte_ue_to_network_rpack():
+    assert build_sms_delivery_report_rpack(0x7A) == bytes.fromhex("02 7a")

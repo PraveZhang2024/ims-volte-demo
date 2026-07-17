@@ -111,8 +111,15 @@ class ImsSmsClient:
             return False
 
         # SIP transaction acknowledgement is independent of GSM RP/TP parsing.
-        self.transport.send(self.builder.ok_response(request, to_tag=new_tag()))
-        LOGGER.info("Answered inbound SIP MESSAGE with 200 OK")
+        self.transport.send(
+            self.builder.response_to_request(
+                request,
+                status_code=202,
+                reason="Accepted",
+                to_tag=new_tag(),
+            )
+        )
+        LOGGER.info("Answered inbound SIP MESSAGE with 202 Accepted")
 
         content_type = (request.get("Content-Type", "") or "").split(";", 1)[0].strip().lower()
         if content_type != "application/vnd.3gpp.sms":
@@ -142,13 +149,20 @@ class ImsSmsClient:
             LOGGER.warning("Inbound SMS MESSAGE has no usable From URI; delivery report not sent")
             return True
 
+        report_ids = SipSessionIds(
+            local_ip=self.local_ip,
+            contact_user=ids.contact_user,
+        )
         report = self.builder.message(
-            ids,
+            report_ids,
             request_uri=target_uri,
             to_uri=target_uri,
             body=report_body,
             route_set=service_routes,
         )
+        original_call_id = request.get("Call-ID", "") or ""
+        if original_call_id:
+            report.add_header("In-Reply-To", original_call_id)
         self.transport.send(report)
         LOGGER.info(
             "Sent GSM SMS delivery report RP-ACK: reference=%s RPDU=%s target=%s",
@@ -221,10 +235,9 @@ def parse_mt_sms_rpdata(body: bytes) -> IncomingSmsRpData:
 def build_sms_delivery_report_rpack(message_reference: int) -> bytes:
     if not 0 <= message_reference <= 255:
         raise SipError("RP message reference must fit in one octet")
-    # RP-ACK (MS to network), RP-User-Data IEI 0x41, and a successful
-    # SMS-DELIVER-REPORT TPDU: TP-MTI=00 followed by TP-PI=00.
-    deliver_report_tpdu = b"\x00\x00"
-    return bytes([0x02, message_reference, 0x41, len(deliver_report_tpdu)]) + deliver_report_tpdu
+    # RP-ACK direction matters: 0x02 is MS/UE -> network. The inverse
+    # network -> MS flow shown by an IMS server uses 0x03.
+    return bytes([0x02, message_reference])
 
 
 def tel_uri(msisdn: str) -> str:
