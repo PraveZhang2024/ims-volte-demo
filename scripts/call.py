@@ -19,7 +19,7 @@ def find_data(msisdn_or_imsi: str) -> dict:
             eps = eps['subsDataList'][0]
         res['msisdn'] = eps['msisdn']
         res['imsi'] = eps['imsi']
-        ip_split = list(map(int, servers.split('.')))
+        ip_split = list(map(int, server.split('.')))
         ip_split[-1] -= 30  # 190 → 160，90 → 60
         res['ims_ip'] = '.'.join(map(str, ip_split))
         auc = requests.get(f'http://{server}:8403/v2.0/authentication/user/{res["imsi"]}', timeout=2).json().get('user')
@@ -40,9 +40,11 @@ def main():
     if not f_data:
         print('未找到 {} 的信息'.format(args.f))
         return -1
+    print('from = {}'.format(f_data))
     if not t_data:
         print('未找到 {} 的信息'.format(args.t))
         return -1
+    print('to = {}'.format(t_data))
     os.system('source /root/venv/bin/activate && cd /root/ims-volte-demo && python3 main.py --config config/demo.yaml --mode call  --log-level DEBUG --pcscf-ip  {}  --pcscf-port 5060 --imsi {} --impi {} --impu "{}"  --realm {} --k {} --opc {} --target-uri {} '.format(
         f_data['ims_ip'],
         f_data['imsi'],
