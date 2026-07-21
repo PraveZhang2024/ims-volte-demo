@@ -118,7 +118,7 @@ class ImsVolteOrchestrator:
                 LOGGER.info("Call duration is unlimited; media loops until remote BYE or signal")
                 media_until = None
             else:
-                LOGGER.info("Call duration: %s seconds", effective_duration)
+                LOGGER.info("Max call duration: %s seconds", effective_duration)
                 media_until = time.monotonic() + effective_duration
 
             while media_until is None or time.monotonic() < media_until:
