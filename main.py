@@ -11,7 +11,7 @@ from app.config import load_config
 from app.errors import ImsClientError
 from app.orchestrator import ImsVolteOrchestrator
 
-DEFAULT_CALL_DURATION_SECONDS = 30.0
+DEFAULT_CALL_DURATION_SECONDS = 180.0
 
 
 def parse_args() -> argparse.Namespace:
