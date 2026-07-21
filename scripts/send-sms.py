@@ -34,7 +34,7 @@ def main():
     parser = argparse.ArgumentParser(description="Python IMS VoLTE demo client")
     parser.add_argument("--f", required=True, help="Self MSISDN/IMSI")
     parser.add_argument("--t", required=True, help="Target MSISDN/IMSI")
-    parser.add_argument("--c", required=True, help="Text Content")
+    parser.add_argument("--c", required=False, help="Text Content")
     args = parser.parse_args()
     f_data = find_data(args.f)
     t_data = find_data(args.t)
@@ -56,7 +56,7 @@ def main():
         f_data['opc'],
         '8613900139000',
         t_data['msisdn'],
-        args.c
+        args.c or '来自脚本的短信测试（默认内容）~'
     ))
     return 0
 
