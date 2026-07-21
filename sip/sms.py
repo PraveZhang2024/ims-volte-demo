@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import logging
 import secrets
 import time
+from typing import Literal
 
 from app.config import AppConfig
 from app.errors import SipError, SipReceiveTimeout
@@ -15,6 +16,26 @@ from sip.message import SipMessage
 from sip.transport import SipTcpTransport
 
 LOGGER = logging.getLogger(__name__)
+
+SmsAlphabet = Literal["gsm7", "ucs2", "binary"]
+
+# 3GPP TS 23.038 default GSM 7-bit alphabet (basic set).
+_GSM7_BASIC = (
+    "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
+    "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà"
+)
+_GSM7_EXTENDED = {
+    0x0A: "\x0c",  # form feed
+    0x14: "^",
+    0x28: "{",
+    0x29: "}",
+    0x2F: "\\",
+    0x3C: "[",
+    0x3D: "~",
+    0x3E: "]",
+    0x40: "|",
+    0x65: "€",
+}
 
 
 @dataclass
@@ -29,6 +50,16 @@ class IncomingSmsRpData:
     originator_address: bytes
     destination_address: bytes
     tpdu: bytes
+
+
+@dataclass(frozen=True)
+class IncomingSmsDeliver:
+    originating_address: str
+    dcs: int
+    alphabet: SmsAlphabet
+    user_data: bytes
+    text: str | None
+    udhi: bool
 
 
 class ImsSmsClient:
@@ -142,6 +173,27 @@ class ImsSmsClient:
             rp_data.destination_address.hex(" ").upper() or "<empty>",
         )
         LOGGER.info("Inbound GSM SMS TPDU: %s", rp_data.tpdu.hex(" ").upper())
+        try:
+            deliver = parse_sms_deliver_tpdu(rp_data.tpdu)
+        except SipError as exc:
+            LOGGER.warning("Unable to parse inbound SMS-DELIVER TPDU: %s", exc)
+        else:
+            if deliver.text is not None:
+                LOGGER.info(
+                    "Inbound SMS-DELIVER: TP-Originating-Address=%s TP-DCS=0x%02X (%s) text=%r",
+                    deliver.originating_address,
+                    deliver.dcs,
+                    deliver.alphabet,
+                    deliver.text,
+                )
+            else:
+                LOGGER.info(
+                    "Inbound SMS-DELIVER: TP-Originating-Address=%s TP-DCS=0x%02X (%s) user-data=%s",
+                    deliver.originating_address,
+                    deliver.dcs,
+                    deliver.alphabet,
+                    deliver.user_data.hex(" ").upper() or "<empty>",
+                )
 
         report_body = build_sms_delivery_report_rpack(rp_data.message_reference)
         target_uri = extract_sip_uri(request.get("From", "") or "")
@@ -240,6 +292,63 @@ def build_sms_delivery_report_rpack(message_reference: int) -> bytes:
     return bytes([0x02, message_reference])
 
 
+def parse_sms_deliver_tpdu(tpdu: bytes) -> IncomingSmsDeliver:
+    """Parse an SMS-DELIVER TPDU and decode user data from TP-DCS."""
+    if not tpdu:
+        raise SipError("SMS-DELIVER TPDU is empty")
+    first = tpdu[0]
+    mti = first & 0x03
+    if mti not in (0x00, 0x02):
+        raise SipError(f"Unsupported SMS TPDU MTI for DELIVER parse: {mti}")
+    udhi = bool(first & 0x40)
+
+    offset = 1
+    originating_address, offset = _read_tp_address(tpdu, offset, "TP-Originating-Address")
+    if offset + 9 > len(tpdu):
+        raise SipError("SMS-DELIVER TPDU is truncated before TP-UDL")
+    # TP-PID, TP-DCS, TP-SCTS(7)
+    dcs = tpdu[offset + 1]
+    offset += 1 + 1 + 7
+    udl = tpdu[offset]
+    offset += 1
+    user_data_raw = tpdu[offset:]
+    alphabet = _dcs_alphabet(dcs)
+
+    if alphabet == "gsm7":
+        expected_octets = (udl * 7 + 7) // 8
+        if len(user_data_raw) < expected_octets:
+            raise SipError(
+                f"SMS-DELIVER GSM 7-bit user data truncated: need {expected_octets} octets, got {len(user_data_raw)}"
+            )
+        packed = user_data_raw[:expected_octets]
+        user_data, text = _decode_gsm7_user_data(packed, udl, udhi)
+    else:
+        if len(user_data_raw) < udl:
+            raise SipError(
+                f"SMS-DELIVER user data truncated: need {udl} octets, got {len(user_data_raw)}"
+            )
+        packed = user_data_raw[:udl]
+        payload = _strip_udh(packed, udhi)
+        if alphabet == "ucs2":
+            try:
+                text = payload.decode("utf-16-be")
+            except UnicodeDecodeError as exc:
+                raise SipError("SMS-DELIVER UCS-2 user data is invalid") from exc
+            user_data = payload
+        else:
+            text = None
+            user_data = payload
+
+    return IncomingSmsDeliver(
+        originating_address=originating_address,
+        dcs=dcs,
+        alphabet=alphabet,
+        user_data=user_data,
+        text=text,
+        udhi=udhi,
+    )
+
+
 def tel_uri(msisdn: str) -> str:
     _require_digits("msisdn", msisdn)
     return f"tel:+{msisdn}"
@@ -254,6 +363,132 @@ def _read_length_value(body: bytes, offset: int, name: str) -> tuple[bytes, int]
     if end > len(body):
         raise SipError(f"RP-DATA {name} is truncated: {length} bytes declared")
     return body[offset:end], end
+
+
+def _read_tp_address(tpdu: bytes, offset: int, name: str) -> tuple[str, int]:
+    if offset >= len(tpdu):
+        raise SipError(f"{name} length is missing")
+    digit_count = tpdu[offset]
+    offset += 1
+    if offset >= len(tpdu):
+        raise SipError(f"{name} type-of-address is missing")
+    toa = tpdu[offset]
+    offset += 1
+    value_len = (digit_count + 1) // 2
+    end = offset + value_len
+    if end > len(tpdu):
+        raise SipError(f"{name} value is truncated")
+    value = tpdu[offset:end]
+    ton = (toa >> 4) & 0x07
+    if ton == 0x05:
+        # Alphanumeric: length is semi-octet count of packed GSM 7-bit data.
+        septets = digit_count * 4 // 7
+        address = _gsm7_septets_to_text(_unpack_gsm7(value, septets))
+    else:
+        digits = _decode_semi_octets(value, digit_count)
+        address = f"+{digits}" if ton == 0x01 and digits else digits
+    return address or "<empty>", end
+
+
+def _dcs_alphabet(dcs: int) -> SmsAlphabet:
+    high = dcs & 0xF0
+    if high in (0xC0, 0xD0, 0xE0):
+        # Message Waiting Indication; 0xE0 uses UCS-2, others GSM 7-bit.
+        return "ucs2" if high == 0xE0 else "gsm7"
+    if high == 0xF0:
+        return "binary" if dcs & 0x04 else "gsm7"
+    if dcs & 0x20:
+        # Compressed payload: treat as opaque binary.
+        return "binary"
+    coding = (dcs >> 2) & 0x03
+    if coding == 0x00:
+        return "gsm7"
+    if coding == 0x02:
+        return "ucs2"
+    return "binary"
+
+
+def _strip_udh(user_data: bytes, udhi: bool) -> bytes:
+    if not udhi:
+        return user_data
+    if not user_data:
+        raise SipError("SMS-DELIVER UDHI set but user data is empty")
+    header_octets = user_data[0] + 1
+    if header_octets > len(user_data):
+        raise SipError("SMS-DELIVER User-Data-Header is truncated")
+    return user_data[header_octets:]
+
+
+def _decode_gsm7_user_data(packed: bytes, udl_septets: int, udhi: bool) -> tuple[bytes, str]:
+    septets = _unpack_gsm7(packed, udl_septets)
+    if udhi:
+        if not packed:
+            raise SipError("SMS-DELIVER UDHI set but user data is empty")
+        header_octets = packed[0] + 1
+        if header_octets > len(packed):
+            raise SipError("SMS-DELIVER User-Data-Header is truncated")
+        # Fill bits align the first text septet to a septet boundary after UDH.
+        header_bits = header_octets * 8
+        fill_bits = (7 - (header_bits % 7)) % 7
+        skip_septets = (header_bits + fill_bits) // 7
+        payload_septets = septets[skip_septets:]
+        payload_bytes = packed[header_octets:]
+    else:
+        payload_septets = septets
+        payload_bytes = packed
+    return payload_bytes, _gsm7_septets_to_text(payload_septets)
+
+
+def _unpack_gsm7(data: bytes, septet_count: int) -> list[int]:
+    septets: list[int] = []
+    bit_offset = 0
+    for _ in range(septet_count):
+        byte_index = bit_offset // 8
+        bit_index = bit_offset % 8
+        if byte_index >= len(data):
+            break
+        if bit_index <= 1:
+            septet = (data[byte_index] >> bit_index) & 0x7F
+        else:
+            low = data[byte_index] >> bit_index
+            high_bits = 7 - (8 - bit_index)
+            if byte_index + 1 < len(data):
+                high = data[byte_index + 1] & ((1 << high_bits) - 1)
+                septet = (low | (high << (8 - bit_index))) & 0x7F
+            else:
+                septet = low & 0x7F
+        septets.append(septet)
+        bit_offset += 7
+    return septets
+
+
+def _gsm7_septets_to_text(septets: list[int]) -> str:
+    chars: list[str] = []
+    escaped = False
+    for value in septets:
+        if escaped:
+            chars.append(_GSM7_EXTENDED.get(value, " "))
+            escaped = False
+            continue
+        if value == 0x1B:
+            escaped = True
+            continue
+        chars.append(_GSM7_BASIC[value] if 0 <= value < len(_GSM7_BASIC) else "?")
+    return "".join(chars)
+
+
+def _decode_semi_octets(value: bytes, digit_count: int) -> str:
+    # GSM BCD nibble map: 0-9 digits, A=*, B=#, C=a, D=b, E=c, F=filler.
+    nibble_map = "0123456789*#abc"
+    digits: list[str] = []
+    for octet in value:
+        for nibble in (octet & 0x0F, (octet >> 4) & 0x0F):
+            if len(digits) >= digit_count:
+                break
+            if nibble == 0x0F:
+                continue
+            digits.append(nibble_map[nibble] if nibble < len(nibble_map) else "?")
+    return "".join(digits)
 
 
 def _tp_address(msisdn: str) -> bytes:
