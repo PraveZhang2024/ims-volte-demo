@@ -5,11 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
 import secrets
+import time
 
 from aka.digest_akav1 import DigestCredentials, build_authorization, digest_debug
 from aka.milenage_service import AkaChallenge, AkaResult, MilenageService
 from app.config import AppConfig
-from app.errors import SipError
+from app.errors import SipError, SipReceiveTimeout
 from ipsec.security_header import (
     SecurityAssociation,
     build_security_client_header,
@@ -119,14 +120,14 @@ class ImsRegistrationClient:
         ids: SipSessionIds,
         local_security: SecurityAssociation,
         security_client_header: str,
-    ) -> tuple[SipMessage, SipTcpTransport]:
+    ) -> SipMessage:
         builder = SipBuilder(self.config, self.local_ip, protected=False)
         message = builder.register(ids, security_client=security_client_header)
         transport = self._transport(local_port=self.config.network.local_sip_port)
         try:
             transport.connect()
             transport.send(message)
-            return transport.receive()
+            return self._receive_final_register_response(transport)
         finally:
             transport.close()
 
@@ -136,7 +137,7 @@ class ImsRegistrationClient:
         ids: SipSessionIds,
         authorization: str,
         security_verify: str,
-    ) -> SipMessage:
+    ) -> tuple[SipMessage, SipTcpTransport]:
         builder = SipBuilder(self.config, self.local_ip, protected=True)
         message = builder.register(
             ids,
@@ -147,10 +148,35 @@ class ImsRegistrationClient:
         try:
             transport.connect()
             transport.send(message)
-            return transport.receive(), transport
+            return self._receive_final_register_response(transport), transport
         except Exception:
             transport.close()
             raise
+
+    def _receive_final_register_response(self, transport: SipTcpTransport) -> SipMessage:
+        deadline = time.monotonic() + self.config.network.connect_timeout_seconds
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SipReceiveTimeout("Timed out waiting for final REGISTER response")
+
+            response = transport.receive(timeout_seconds=remaining)
+            if response.status_code is None:
+                LOGGER.info(
+                    "Ignoring SIP request while waiting for REGISTER response: %s",
+                    response.start_line,
+                )
+                continue
+            if response.method != "REGISTER":
+                LOGGER.info(
+                    "Ignoring SIP response for another method while waiting for REGISTER: %s",
+                    response.start_line,
+                )
+                continue
+            if 100 <= response.status_code < 200:
+                LOGGER.info("Received provisional REGISTER response: %s", response.start_line)
+                continue
+            return response
 
     def _transport(self, local_port: int) -> SipTcpTransport:
         return SipTcpTransport(

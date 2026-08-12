@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 import logging
 import socket
 
@@ -31,6 +32,7 @@ class SipTcpTransport:
         self.dump_sip = dump_sip
         self._sock: socket.socket | None = None
         self._parser = SipStreamParser()
+        self._pending_messages: deque[SipMessage] = deque()
 
     def connect(self) -> None:
         if self._sock is not None:
@@ -47,6 +49,8 @@ class SipTcpTransport:
                 f"SIP TCP connect failed: {self.local_ip}:{self.local_port} -> "
                 f"{self.remote_ip}:{self.remote_port}: {exc}"
             ) from exc
+        self._parser = SipStreamParser()
+        self._pending_messages.clear()
         self._sock = sock
         LOGGER.info(
             "SIP TCP connected: %s:%s -> %s:%s",
@@ -64,6 +68,9 @@ class SipTcpTransport:
         sock.sendall(payload)
 
     def receive(self, *, timeout_seconds: float | None = None) -> SipMessage:
+        if self._pending_messages:
+            return self._log_received(self._pending_messages.popleft())
+
         sock = self._require_socket()
         original_timeout = sock.gettimeout()
         if timeout_seconds is not None:
@@ -75,10 +82,8 @@ class SipTcpTransport:
                     raise SipError("SIP TCP connection closed by peer")
                 messages = self._parser.feed(data)
                 if messages:
-                    message = messages[0]
-                    if self.dump_sip:
-                        LOGGER.info("SIP RECV\n%s", message.to_bytes().decode("utf-8", errors="replace"))
-                    return message
+                    self._pending_messages.extend(messages[1:])
+                    return self._log_received(messages[0])
         except TimeoutError as exc:
             raise SipReceiveTimeout(f"SIP receive timed out after {sock.gettimeout()} seconds") from exc
         finally:
@@ -94,3 +99,8 @@ class SipTcpTransport:
         if self._sock is None:
             raise SipError("SIP TCP transport is not connected")
         return self._sock
+
+    def _log_received(self, message: SipMessage) -> SipMessage:
+        if self.dump_sip:
+            LOGGER.info("SIP RECV\n%s", message.to_bytes().decode("utf-8", errors="replace"))
+        return message
