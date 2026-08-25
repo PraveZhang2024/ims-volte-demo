@@ -57,7 +57,7 @@ def main():
         f_data['realm'],
         f_data['k'],
         f_data['opc'],
-        '8613900139000',
+        '8613900139000' if f_data['ims_ip'] == '10.2.30.160' else '8613800138000',
         t_data['msisdn'],
         args.c or '来自脚本的短信测试（默认内容）~'
     ))
