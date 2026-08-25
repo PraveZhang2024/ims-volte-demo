@@ -2,7 +2,7 @@ import requests, json, os, sys, argparse
 
 
 def find_data(msisdn_or_imsi: str) -> dict:
-    servers = ['10.2.30.190', '10.2.30.90']
+    servers = ['10.2.30.50', '10.2.30.190', '10.2.30.90']
     res = {
         'msisdn': '', 'imsi': '', 'ims_ip': '', 'k': '', 'opc': '', 'realm': ''
     }
