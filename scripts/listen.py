@@ -20,7 +20,10 @@ def find_data(msisdn_or_imsi: str) -> dict:
         res['msisdn'] = eps['msisdn']
         res['imsi'] = eps['imsi']
         ip_split = list(map(int, server.split('.')))
-        ip_split[-1] -= 30  # 190 → 160，90 → 60
+        if ip_split[-1] in [90,190]:
+            ip_split[-1] -= 30  # 190 → 160，90 → 60
+        else:
+            ip_split[-1] += 10  # 150 → 160，50 → 60
         res['ims_ip'] = '.'.join(map(str, ip_split))
         auc = requests.get(f'http://{server}:8403/v2.0/authentication/user/{res["imsi"]}', timeout=2).json().get('user')
         res['k'], res['opc'] = auc['ki'], auc['opc']
