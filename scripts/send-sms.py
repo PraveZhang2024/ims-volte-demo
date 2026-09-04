@@ -7,13 +7,12 @@ def find_data(msisdn_or_imsi: str) -> dict:
         'msisdn': '', 'imsi': '', 'ims_ip': '', 'k': '', 'opc': '', 'realm': ''
     }
     for server in servers:
-        if len(msisdn_or_imsi) == 15:
-            eps = requests.get(f'http://{server}:8403/v2.0/epsSubscription/subscriber/{msisdn_or_imsi}').json()
-            if 'subscriber' not in eps:
-                continue
+        eps = requests.get(f'http://{server}:8403/v2.0/epsSubscription/subscriber/{msisdn_or_imsi}').json()
+        if 'subscriber' in eps:
             eps = eps['subscriber']
         else:
-            eps = requests.get(f'http://{server}:8403/v2.0/epsSubscription/subscriber?msisdnPrefix={msisdn_or_imsi}').json()
+            eps = requests.get(
+                f'http://{server}:8403/v2.0/epsSubscription/subscriber?msisdnPrefix={msisdn_or_imsi}').json()
             if 'subsDataList' not in eps or not len(eps['subsDataList']) == 1:
                 continue
             eps = eps['subsDataList'][0]
